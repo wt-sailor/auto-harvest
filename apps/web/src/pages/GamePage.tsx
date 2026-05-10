@@ -19,6 +19,7 @@ import {
 } from '../store/slices/progressionSlice';
 import { selectDrones, loadSerializedState } from '../store/slices/gameSlice';
 import { setActivePanel, type ActivePanel, addConsoleLog } from '../store/slices/uiSlice';
+import { runAutonomousDroneLoop, stopAutonomousDroneLoop } from '../scripting/Sandbox';
 import { worldsApi } from '../api/apiClient';
 import { Link } from 'react-router-dom';
 import {
@@ -283,6 +284,38 @@ export function GamePage() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [isServerMode, worldId, serializeState]);
+
+  // ── Autonomous Drone Scripts ──
+  const activeScriptedDrones = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const currentScripted = new Set<string>();
+    drones.forEach(drone => {
+      if (drone.status === 'scripted') {
+        currentScripted.add(drone.id);
+        // Only start if not already running
+        if (!activeScriptedDrones.current.has(drone.id)) {
+          runAutonomousDroneLoop(drone.id, drone.script || '');
+        }
+      }
+    });
+
+    // Stop any drones that were scripted but no longer are
+    activeScriptedDrones.current.forEach(id => {
+      if (!currentScripted.has(id)) {
+        stopAutonomousDroneLoop(id);
+      }
+    });
+
+    activeScriptedDrones.current = currentScripted;
+  }, [drones]);
+
+  // Cleanup all loops on unmount only
+  useEffect(() => {
+    return () => {
+      activeScriptedDrones.current.forEach(id => stopAutonomousDroneLoop(id));
+    };
+  }, []);
 
   // Determine available tabs
   const tabs: { key: ActivePanel; label: string; icon: typeof ShoppingCart; enabled: boolean }[] = [

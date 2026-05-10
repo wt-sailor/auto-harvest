@@ -3,7 +3,7 @@
 // ============================================================
 
 import { store } from '../store';
-import { moveRobot, moveDrone, plantCrop, harvestCrop } from '../store/slices/gameSlice';
+import { moveRobot, moveDrone, plantCrop, harvestCrop, setDroneStatus } from '../store/slices/gameSlice';
 import { earnGold } from '../store/slices/progressionSlice';
 import { addConsoleLog, setScriptRunning } from '../store/slices/uiSlice';
 import type { CropType, ConsoleEntry } from '@autoharvest/shared';
@@ -25,7 +25,7 @@ function sleep(ms: number): Promise<void> {
  * Execute a script targeting either the active entity (farmer/drone)
  * or a specific drone by ID.
  */
-export async function executeScript(code: string, targetDroneId?: string): Promise<ExecutionResult> {
+export async function executeScript(code: string, options?: { targetDroneId?: string; isAutonomous?: boolean }): Promise<ExecutionResult> {
   const logs: string[] = [];
   let instructionCount = 0;
   const commandDelay = 150;
@@ -41,13 +41,19 @@ export async function executeScript(code: string, targetDroneId?: string): Promi
     if (instructionCount > MAX_INSTRUCTIONS_PER_RUN) {
       throw new Error(`Instruction limit exceeded (${MAX_INSTRUCTIONS_PER_RUN}). Script stopped.`);
     }
+    if (options?.targetDroneId && stopSignals.get(options.targetDroneId)) {
+      throw new Error('Script stopped by user.');
+    }
+    if (!options?.isAutonomous && stopSignals.get('manual')) {
+      throw new Error('Script stopped by user.');
+    }
   };
 
   // Resolve which entity to target
   const getTarget = () => {
     const state = store.getState().game;
-    if (targetDroneId) {
-      return state.drones.find((d) => d.id === targetDroneId) || null;
+    if (options?.targetDroneId) {
+      return state.drones.find((d) => d.id === options.targetDroneId) || null;
     }
     if (state.controlMode === 'drone' && state.activeDroneId) {
       return state.drones.find((d) => d.id === state.activeDroneId) || null;
@@ -56,12 +62,12 @@ export async function executeScript(code: string, targetDroneId?: string): Promi
   };
 
   const isDroneTarget = () => {
-    if (targetDroneId) return true;
+    if (options?.targetDroneId) return true;
     return store.getState().game.controlMode === 'drone';
   };
 
   const getDroneId = (): string | undefined => {
-    if (targetDroneId) return targetDroneId;
+    if (options?.targetDroneId) return options.targetDroneId;
     return store.getState().game.activeDroneId || undefined;
   };
 
@@ -186,16 +192,25 @@ export async function executeScript(code: string, targetDroneId?: string): Promi
       checkLimit();
       await sleep(Math.min(ticks * 100, 5000));
     },
+
+    getGridSize: () => {
+      checkLimit();
+      const { gridWidth, gridHeight } = store.getState().game;
+      return { width: gridWidth, height: gridHeight };
+    },
   };
 
   // ── Transform loops for safety ──
   const transformedCode = transformLoops(code);
 
   try {
-    addLog('▶ Script started...', 'info');
-    store.dispatch(setScriptRunning(true));
+    if (!options?.isAutonomous) {
+      stopSignals.set('manual', false);
+      addLog('▶ Script started...', 'info');
+      store.dispatch(setScriptRunning(true));
+    }
 
-    const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+    const AsyncFunction = Object.getPrototypeOf(async function () { }).constructor;
     const sandboxedFn = new AsyncFunction(
       ...Object.keys(api),
       '__checkLimit__',
@@ -208,14 +223,18 @@ export async function executeScript(code: string, targetDroneId?: string): Promi
 
     await Promise.race([sandboxedFn(...Object.values(api), checkLimit), timeoutPromise]);
 
-    addLog(`✅ Script completed (${instructionCount} instructions)`, 'success');
+    if (!options?.isAutonomous) {
+      addLog(`✅ Script completed (${instructionCount} instructions)`, 'success');
+    }
     return { success: true, logs, instructionsExecuted: instructionCount };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     addLog(`❌ Error: ${errorMsg}`, 'error');
     return { success: false, logs, error: errorMsg, instructionsExecuted: instructionCount };
   } finally {
-    store.dispatch(setScriptRunning(false));
+    if (!options?.isAutonomous) {
+      store.dispatch(setScriptRunning(false));
+    }
   }
 }
 
@@ -232,5 +251,38 @@ function transformLoops(code: string): string {
 }
 
 export function stopScript() {
+  stopSignals.set('manual', true);
   store.dispatch(setScriptRunning(false));
+}
+
+const activeAutonomousLoops = new Set<string>();
+const stopSignals = new Map<string, boolean>();
+
+export async function runAutonomousDroneLoop(droneId: string, code: string) {
+  if (activeAutonomousLoops.has(droneId)) return;
+  activeAutonomousLoops.add(droneId);
+  stopSignals.set(droneId, false);
+
+  while (!stopSignals.get(droneId)) {
+    const drone = store.getState().game.drones.find(d => d.id === droneId);
+    if (!drone || drone.status !== 'scripted') {
+      break;
+    }
+
+    const result = await executeScript(code, { targetDroneId: droneId, isAutonomous: true });
+
+    if (!result.success) {
+      store.dispatch(addConsoleLog({ id: uuid(), message: `⚠ Drone ${drone.name} script error, stopping auto mode.`, type: 'warn', timestamp: Date.now() }));
+      store.dispatch(setDroneStatus({ droneId, status: 'idle' }));
+      break;
+    }
+    await sleep(500); // Wait briefly before restarting script loop
+  }
+
+  activeAutonomousLoops.delete(droneId);
+  stopSignals.delete(droneId);
+}
+
+export function stopAutonomousDroneLoop(droneId: string) {
+  stopSignals.set(droneId, true);
 }

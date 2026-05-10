@@ -50,6 +50,9 @@ const progressionSlice = createSlice({
           'unlock-potato': 'potato' as CropType,
           'unlock-tomato': 'tomato' as CropType,
           'unlock-pumpkin': 'pumpkin' as CropType,
+          'unlock-strawberry': 'strawberry' as CropType,
+          'unlock-sunflower': 'sunflower' as CropType,
+          'unlock-melon': 'melon' as CropType,
         };
         if (cropMap[itemId] && !state.unlockedCrops.includes(cropMap[itemId])) {
           state.unlockedCrops.push(cropMap[itemId]);

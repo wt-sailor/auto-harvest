@@ -38,6 +38,19 @@ import {
 
 // ─── Helpers ──────────────────────────────────────────────
 
+export const DEFAULT_DRONE_SCRIPT = `// AutoHarvest Drone Script
+// This script runs continuously while the drone is in 'Auto' mode.
+// Available commands:
+//   moveUp(), moveDown(), moveLeft(), moveRight()
+//   plant("wheat"), harvest(), getTile(), getInventory()
+//   log("message"), wait(ticks)
+
+// Example: Simple Harvest Loop
+await moveRight();
+await harvest();
+await wait(5);
+`;
+
 function createInitialTiles(width: number, height: number): TileState[][] {
   const tiles: TileState[][] = [];
   for (let y = 0; y < height; y++) {
@@ -82,7 +95,7 @@ function createDrone(id: string, name: string, x: number, y: number): DroneState
     energy: DRONE_MAX_ENERGY, maxEnergy: DRONE_MAX_ENERGY,
     status: 'idle' as DroneStatus,
     assignedZoneId: null,
-    script: null,
+    script: DEFAULT_DRONE_SCRIPT,
   };
 }
 
@@ -338,6 +351,11 @@ const gameSlice = createSlice({
       if (drone) drone.assignedZoneId = action.payload.zoneId;
     },
 
+    renameDrone(state, action: PayloadAction<{ droneId: string; name: string }>) {
+      const drone = state.drones.find((d) => d.id === action.payload.droneId);
+      if (drone) drone.name = action.payload.name.trim() || drone.name;
+    },
+
     // ── Farm Zones ──
 
     addFarmZone(state, action: PayloadAction<FarmZone>) {
@@ -469,7 +487,7 @@ const gameSlice = createSlice({
 
 export const {
   initWorld, moveFarmer, moveDrone, moveRobot, switchControlMode, selectDrone,
-  plantCrop, harvestCrop, addDrone, setDroneStatus, setDroneScript,
+  plantCrop, harvestCrop, addDrone, setDroneStatus, setDroneScript, renameDrone,
   assignDroneToZone, addFarmZone, removeFarmZone, expandFarm,
   gameTick, updateEntityVisuals, setRunning, setTickRate,
   addItem, removeItem, upgradeEnergy, loadSerializedState,

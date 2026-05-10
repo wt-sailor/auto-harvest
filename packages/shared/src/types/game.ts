@@ -22,6 +22,9 @@ export enum CropType {
   POTATO = 'potato',
   TOMATO = 'tomato',
   PUMPKIN = 'pumpkin',
+  STRAWBERRY = 'strawberry',
+  SUNFLOWER = 'sunflower',
+  MELON = 'melon',
 }
 
 /** Growth stage of a crop */
@@ -132,12 +135,18 @@ export enum ResourceType {
   POTATO = 'potato',
   TOMATO = 'tomato',
   PUMPKIN = 'pumpkin',
+  STRAWBERRY = 'strawberry',
+  SUNFLOWER = 'sunflower',
+  MELON = 'melon',
   SEED_WHEAT = 'seed_wheat',
   SEED_CORN = 'seed_corn',
   SEED_CARROT = 'seed_carrot',
   SEED_POTATO = 'seed_potato',
   SEED_TOMATO = 'seed_tomato',
   SEED_PUMPKIN = 'seed_pumpkin',
+  SEED_STRAWBERRY = 'seed_strawberry',
+  SEED_SUNFLOWER = 'seed_sunflower',
+  SEED_MELON = 'seed_melon',
   GOLD = 'gold',
   WOOD = 'wood',
 }

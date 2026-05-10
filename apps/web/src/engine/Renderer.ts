@@ -279,7 +279,11 @@ export class Renderer {
 
     const px = farmer.visualX * (TILE_SIZE + TILE_GAP) + TILE_SIZE / 2;
     const py = farmer.visualY * (TILE_SIZE + TILE_GAP) + TILE_SIZE / 2;
-    const size = TILE_SIZE * 0.35;
+    const size = TILE_SIZE * 0.4;
+    
+    // Calculate simple walk animation based on visual movement
+    const isMoving = Math.abs(farmer.visualX - farmer.x) > 0.05 || Math.abs(farmer.visualY - farmer.y) > 0.05;
+    const walkCycle = isMoving ? Math.sin(Date.now() / 150) * 0.5 : 0;
 
     // Active glow
     if (isActive) {
@@ -287,41 +291,130 @@ export class Renderer {
       this.ctx.shadowBlur = 14;
     }
 
-    // Body (overalls — brown)
-    this.ctx.fillStyle = '#6B4226';
+    this.ctx.translate(px, py);
+
+    // Directional offsets
+    let bodyRot = 0;
+    let headOffY = 0;
+    let headOffX = 0;
+    
+    if (farmer.direction === 'left') { bodyRot = -0.1; headOffX = -2; }
+    if (farmer.direction === 'right') { bodyRot = 0.1; headOffX = 2; }
+    if (farmer.direction === 'up') headOffY = -2;
+    if (farmer.direction === 'down') headOffY = 2;
+
+    this.ctx.rotate(bodyRot);
+
+    // --- LEGS (Denim Blue) ---
+    this.ctx.fillStyle = '#2A4B7C';
+    // Left leg
     this.ctx.beginPath();
-    this.roundRect(px - size * 0.7, py - size * 0.3, size * 1.4, size * 1.4, 4);
+    this.roundRect(-size * 0.4, size * 0.1, size * 0.35, size * 0.6 + walkCycle * size * 0.3, 2);
+    this.ctx.fill();
+    // Right leg
+    this.ctx.beginPath();
+    this.roundRect(size * 0.05, size * 0.1, size * 0.35, size * 0.6 - walkCycle * size * 0.3, 2);
     this.ctx.fill();
 
-    // Head (skin)
-    this.ctx.fillStyle = '#F5D6BA';
+    // --- SHOES (Brown) ---
+    this.ctx.fillStyle = '#4A2511';
     this.ctx.beginPath();
-    this.ctx.arc(px, py - size * 0.5, size * 0.5, 0, Math.PI * 2);
+    this.roundRect(-size * 0.45, size * 0.7 + walkCycle * size * 0.3, size * 0.4, size * 0.25, 3);
+    this.ctx.fill();
+    this.ctx.beginPath();
+    this.roundRect(size * 0.05, size * 0.7 - walkCycle * size * 0.3, size * 0.4, size * 0.25, 3);
     this.ctx.fill();
 
-    // Hat (green straw hat)
-    this.ctx.fillStyle = '#5A7D3A';
+    // --- TORSO (Plaid Shirt & Overalls) ---
+    // Shirt (Red/Black Plaid abstract)
+    this.ctx.fillStyle = '#A32828';
     this.ctx.beginPath();
-    this.roundRect(px - size * 0.8, py - size * 1.1, size * 1.6, size * 0.4, 3);
+    this.roundRect(-size * 0.6, -size * 0.5, size * 1.2, size * 0.8, 4);
     this.ctx.fill();
-    this.ctx.fillStyle = '#4A6D2A';
+    
+    // Overalls (Denim Blue)
+    this.ctx.fillStyle = '#3A5B8C';
     this.ctx.beginPath();
-    this.roundRect(px - size * 0.5, py - size * 1.4, size * 1, size * 0.5, 3);
+    this.roundRect(-size * 0.5, -size * 0.1, size * 1.0, size * 0.5, 3);
+    this.ctx.fill();
+    // Overall Straps
+    this.ctx.fillRect(-size * 0.4, -size * 0.4, size * 0.15, size * 0.4);
+    this.ctx.fillRect(size * 0.25, -size * 0.4, size * 0.15, size * 0.4);
+    // Buttons
+    this.ctx.fillStyle = '#F39C12';
+    this.ctx.beginPath(); this.ctx.arc(-size * 0.32, -size * 0.1, 2, 0, Math.PI * 2); this.ctx.fill();
+    this.ctx.beginPath(); this.ctx.arc(size * 0.32, -size * 0.1, 2, 0, Math.PI * 2); this.ctx.fill();
+
+    // --- ARMS (Shirt sleeves & Hands) ---
+    this.ctx.fillStyle = '#A32828';
+    // Left arm
+    this.ctx.beginPath();
+    this.ctx.ellipse(-size * 0.65, -size * 0.1 - walkCycle * size * 0.2, size * 0.2, size * 0.4, 0.2, 0, Math.PI * 2);
+    this.ctx.fill();
+    // Right arm
+    this.ctx.beginPath();
+    this.ctx.ellipse(size * 0.65, -size * 0.1 + walkCycle * size * 0.2, size * 0.2, size * 0.4, -0.2, 0, Math.PI * 2);
+    this.ctx.fill();
+    
+    // Hands (Skin color)
+    this.ctx.fillStyle = '#F5CBA7';
+    this.ctx.beginPath(); this.ctx.arc(-size * 0.7, size * 0.2 - walkCycle * size * 0.2, size * 0.15, 0, Math.PI * 2); this.ctx.fill();
+    this.ctx.beginPath(); this.ctx.arc(size * 0.7, size * 0.2 + walkCycle * size * 0.2, size * 0.15, 0, Math.PI * 2); this.ctx.fill();
+
+    // Reset rotation for head so it stays upright
+    this.ctx.rotate(-bodyRot);
+
+    // --- HEAD ---
+    this.ctx.translate(headOffX, headOffY);
+    
+    // Skin
+    this.ctx.fillStyle = '#F5CBA7';
+    this.ctx.beginPath();
+    this.ctx.arc(0, -size * 0.7, size * 0.45, 0, Math.PI * 2);
     this.ctx.fill();
 
-    // Eyes (small dots based on direction)
-    const eyeOff = size * 0.2;
-    let exOff = 0, eyOff = 0;
-    switch (farmer.direction) {
-      case 'up': eyOff = -eyeOff; break;
-      case 'down': eyOff = eyeOff; break;
-      case 'left': exOff = -eyeOff; break;
-      case 'right': exOff = eyeOff; break;
+    // Beard
+    if (farmer.direction !== 'up') {
+      this.ctx.fillStyle = '#6E2C00';
+      this.ctx.beginPath();
+      this.ctx.ellipse(0, -size * 0.45, size * 0.4, size * 0.25, 0, 0, Math.PI * 2);
+      this.ctx.fill();
     }
-    this.ctx.fillStyle = '#333';
-    this.ctx.beginPath(); this.ctx.arc(px - 4 + exOff, py - size * 0.5 + eyOff, 2, 0, Math.PI * 2); this.ctx.fill();
-    this.ctx.beginPath(); this.ctx.arc(px + 4 + exOff, py - size * 0.5 + eyOff, 2, 0, Math.PI * 2); this.ctx.fill();
 
+    // Eyes
+    const eyeOff = size * 0.15;
+    let exOff = 0, eyOff = 0;
+    if (farmer.direction === 'up') eyOff = -eyeOff;
+    if (farmer.direction === 'down') eyOff = eyeOff;
+    if (farmer.direction === 'left') exOff = -eyeOff;
+    if (farmer.direction === 'right') exOff = eyeOff;
+    
+    if (farmer.direction !== 'up') {
+      this.ctx.fillStyle = '#111';
+      this.ctx.beginPath(); this.ctx.arc(-size * 0.15 + exOff, -size * 0.75 + eyOff, 2.5, 0, Math.PI * 2); this.ctx.fill();
+      this.ctx.beginPath(); this.ctx.arc(size * 0.15 + exOff, -size * 0.75 + eyOff, 2.5, 0, Math.PI * 2); this.ctx.fill();
+    }
+
+    // --- HAT (Detailed Straw Hat) ---
+    // Brim
+    this.ctx.fillStyle = '#E5C07B';
+    this.ctx.beginPath();
+    this.ctx.ellipse(0, -size * 0.9, size * 0.8, size * 0.25, 0, 0, Math.PI * 2);
+    this.ctx.fill();
+    // Crown
+    this.ctx.fillStyle = '#D4AC0D';
+    this.ctx.beginPath();
+    this.ctx.ellipse(0, -size * 1.05, size * 0.45, size * 0.35, 0, 0, Math.PI * 2);
+    this.ctx.fill();
+    // Hat band
+    this.ctx.fillStyle = '#A32828';
+    this.ctx.beginPath();
+    this.ctx.ellipse(0, -size * 0.95, size * 0.46, size * 0.15, 0, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // Clean up transforms
+    this.ctx.translate(-headOffX, -headOffY);
+    this.ctx.translate(-px, -py);
     this.ctx.shadowBlur = 0;
 
     // Active indicator (dashed border)
@@ -360,74 +453,132 @@ export class Renderer {
 
     const px = drone.visualX * (TILE_SIZE + TILE_GAP) + TILE_SIZE / 2;
     const py = drone.visualY * (TILE_SIZE + TILE_GAP) + TILE_SIZE / 2;
-    const size = TILE_SIZE * 0.32;
+    const size = TILE_SIZE * 0.35;
+
+    // Hover animation
+    const hoverY = Math.sin(Date.now() / 200 + drone.id.charCodeAt(0)) * 3;
+    this.ctx.translate(px, py + hoverY);
 
     // Color based on status
     const statusColors = {
-      idle: { body: '#3D3D3D', eye: '#777', glow: '#555' },
-      manual: { body: '#2D3436', eye: '#3B82F6', glow: '#3B82F6' },
-      scripted: { body: '#2D3436', eye: '#F59E0B', glow: '#F59E0B' },
+      idle: { body: '#B0BEC5', accent: '#78909C', light: '#546E7A', glow: '#546E7A' },
+      manual: { body: '#E0E0E0', accent: '#64B5F6', light: '#2196F3', glow: '#2196F3' },
+      scripted: { body: '#E0E0E0', accent: '#FFD54F', light: '#FFB300', glow: '#FFB300' },
     };
     const colors = statusColors[drone.status];
 
     // Glow
     if (isActive || drone.status === 'scripted') {
       this.ctx.shadowColor = colors.glow;
-      this.ctx.shadowBlur = drone.status === 'scripted' ? 8 + Math.sin(Date.now() / 200) * 4 : 12;
+      this.ctx.shadowBlur = drone.status === 'scripted' ? 10 + Math.sin(Date.now() / 150) * 5 : 15;
     }
 
-    // Body
-    this.ctx.fillStyle = colors.body;
-    this.ctx.beginPath();
-    this.roundRect(px - size, py - size, size * 2, size * 2, 6);
-    this.ctx.fill();
+    // --- ROTOR ARMS ---
+    this.ctx.strokeStyle = '#455A64';
+    this.ctx.lineWidth = 4;
+    this.ctx.lineCap = 'round';
+    
+    const armLength = size * 0.9;
+    const drawArm = (angleX: number, angleY: number) => {
+      this.ctx.beginPath();
+      this.ctx.moveTo(0, 0);
+      this.ctx.lineTo(angleX * armLength, angleY * armLength);
+      this.ctx.stroke();
+    };
 
-    // Border
-    this.ctx.strokeStyle = colors.eye;
-    this.ctx.lineWidth = 2;
-    this.ctx.beginPath();
-    this.roundRect(px - size, py - size, size * 2, size * 2, 6);
-    this.ctx.stroke();
+    drawArm(-1, -1); // Top Left
+    drawArm(1, -1);  // Top Right
+    drawArm(-1, 1);  // Bottom Left
+    drawArm(1, 1);   // Bottom Right
 
     this.ctx.shadowBlur = 0;
 
-    // Propeller arms
-    const propAngle = (Date.now() / 100) % (Math.PI * 2);
-    this.ctx.strokeStyle = '#555';
-    this.ctx.lineWidth = 1.5;
-    for (let i = 0; i < 4; i++) {
-      const angle = propAngle + (i * Math.PI / 2);
-      const armX = px + Math.cos(angle) * size * 0.7;
-      const armY = py + Math.sin(angle) * size * 0.7;
-      this.ctx.beginPath();
-      this.ctx.arc(armX, armY, 4, 0, Math.PI * 2);
-      this.ctx.stroke();
-    }
+    // --- PROPELLERS ---
+    const propAngle = (Date.now() / 50) % (Math.PI * 2);
+    const drawPropeller = (x: number, y: number, offsetAngle: number) => {
+      this.ctx.save();
+      this.ctx.translate(x, y);
+      
+      // Motor base
+      this.ctx.fillStyle = '#37474F';
+      this.ctx.beginPath(); this.ctx.arc(0, 0, 4, 0, Math.PI * 2); this.ctx.fill();
 
-    // Eye (direction-based)
-    const eyeOffset = size * 0.35;
-    let eyeX = px, eyeY = py;
-    switch (drone.direction) {
-      case 'up': eyeY -= eyeOffset; break;
-      case 'down': eyeY += eyeOffset; break;
-      case 'left': eyeX -= eyeOffset; break;
-      case 'right': eyeX += eyeOffset; break;
-    }
-    this.ctx.fillStyle = colors.eye;
-    this.ctx.beginPath(); this.ctx.arc(eyeX, eyeY, 4, 0, Math.PI * 2); this.ctx.fill();
-    this.ctx.fillStyle = '#FFF';
-    this.ctx.beginPath(); this.ctx.arc(eyeX, eyeY, 2, 0, Math.PI * 2); this.ctx.fill();
+      // Spinning blades
+      if (drone.status !== 'idle') {
+        this.ctx.rotate(propAngle + offsetAngle);
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        this.ctx.beginPath(); this.ctx.ellipse(0, 0, 12, 3, 0, 0, Math.PI * 2); this.ctx.fill();
+        this.ctx.beginPath(); this.ctx.ellipse(0, 0, 3, 12, 0, 0, Math.PI * 2); this.ctx.fill();
+      } else {
+        // Static blades
+        this.ctx.rotate(offsetAngle);
+        this.ctx.fillStyle = '#CFD8DC';
+        this.ctx.beginPath(); this.ctx.ellipse(0, 0, 12, 2, 0, 0, Math.PI * 2); this.ctx.fill();
+      }
+      this.ctx.restore();
+    };
 
-    // Circuit lines
-    this.ctx.strokeStyle = `${colors.eye}40`;
-    this.ctx.lineWidth = 1;
+    drawPropeller(-armLength, -armLength, 0);
+    drawPropeller(armLength, -armLength, Math.PI / 4);
+    drawPropeller(-armLength, armLength, Math.PI / 4);
+    drawPropeller(armLength, armLength, 0);
+
+    // --- CENTRAL CHASSIS ---
+    // Outer shell
+    this.ctx.fillStyle = colors.body;
     this.ctx.beginPath();
-    this.ctx.moveTo(px - size + 5, py + 3); this.ctx.lineTo(px + size - 5, py + 3);
+    this.ctx.arc(0, 0, size * 0.7, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.strokeStyle = colors.accent;
+    this.ctx.lineWidth = 2;
     this.ctx.stroke();
+
+    // Top detail plate
+    this.ctx.fillStyle = '#FFFFFF';
+    this.ctx.beginPath();
+    this.ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // --- CAMERA EYE ---
+    // Pivot offset based on direction
+    const eyeMaxOff = size * 0.2;
+    let ex = 0, ey = 0;
+    if (drone.direction === 'up') ey = -eyeMaxOff;
+    if (drone.direction === 'down') ey = eyeMaxOff;
+    if (drone.direction === 'left') ex = -eyeMaxOff;
+    if (drone.direction === 'right') ex = eyeMaxOff;
+
+    // Lens housing
+    this.ctx.fillStyle = '#263238';
+    this.ctx.beginPath();
+    this.ctx.arc(ex, ey, size * 0.3, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // Lens glass
+    this.ctx.fillStyle = colors.light;
+    this.ctx.beginPath();
+    this.ctx.arc(ex, ey, size * 0.15, 0, Math.PI * 2);
+    this.ctx.fill();
+    
+    // Lens reflection
+    this.ctx.fillStyle = '#FFFFFF';
+    this.ctx.beginPath();
+    this.ctx.arc(ex - size * 0.05, ey - size * 0.05, size * 0.05, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // --- STATUS LIGHT ---
+    this.ctx.fillStyle = colors.light;
+    this.ctx.shadowColor = colors.light;
+    this.ctx.shadowBlur = 5;
+    this.ctx.beginPath(); this.ctx.arc(0, size * 0.5, 2.5, 0, Math.PI * 2); this.ctx.fill();
+    this.ctx.shadowBlur = 0;
+
+    // Restore translate so highlighting aligns
+    this.ctx.translate(-px, -(py + hoverY));
 
     // Active tile highlight
     if (isActive) {
-      this.ctx.strokeStyle = colors.eye + '80';
+      this.ctx.strokeStyle = colors.light + '80';
       this.ctx.lineWidth = 2;
       this.ctx.setLineDash([4, 4]);
       this.ctx.beginPath();
@@ -439,20 +590,21 @@ export class Renderer {
     }
 
     // Energy bar
-    this.drawEnergyBar(px - size, py + size + 4, size * 2, drone.energy, drone.maxEnergy);
+    this.drawEnergyBar(px - size, py + size + 8, size * 2, drone.energy, drone.maxEnergy);
 
     // Status label
     this.ctx.font = '8px sans-serif';
     this.ctx.textAlign = 'center';
     const label = drone.status === 'scripted' ? '⟳ Auto' : drone.status === 'manual' ? '🎮' : '';
     if (label) {
-      this.ctx.fillStyle = colors.eye;
-      this.ctx.fillText(label, px, py - size - 4);
+      this.ctx.fillStyle = colors.light;
+      this.ctx.fillText(label, px, py - size - 8);
     }
 
     // Name label
-    this.ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    this.ctx.fillText(drone.name, px, py + size + 18);
+    this.ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    this.ctx.font = 'bold 9px sans-serif';
+    this.ctx.fillText(drone.name, px, py + size + 22);
 
     this.ctx.restore();
   }

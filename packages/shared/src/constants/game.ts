@@ -3,8 +3,8 @@
 // ============================================================
 
 /** Default grid dimensions */
-export const DEFAULT_GRID_WIDTH = 10;
-export const DEFAULT_GRID_HEIGHT = 10;
+export const DEFAULT_GRID_WIDTH = 16;
+export const DEFAULT_GRID_HEIGHT = 16;
 
 /** Maximum grid size */
 export const MAX_GRID_WIDTH = 50;
@@ -168,5 +168,29 @@ export const SHOP_ITEMS: ShopItem[] = [
   {
     id: 'seed-pack-pumpkin', name: 'Pumpkin Seed Pack', description: 'Get 5 pumpkin seeds.',
     cost: 50, category: 'crop', icon: '🎃', requiredTier: 3, maxPurchases: 99,
+  },
+  {
+    id: 'unlock-strawberry', name: 'Strawberry Seeds', description: 'Unlock strawberry farming. Fast growth, good profit.',
+    cost: 100, category: 'crop', icon: '🍓', requiredTier: 2, maxPurchases: 1,
+  },
+  {
+    id: 'unlock-sunflower', name: 'Sunflower Seeds', description: 'Unlock sunflowers. Beautiful and profitable!',
+    cost: 160, category: 'crop', icon: '🌻', requiredTier: 3, maxPurchases: 1,
+  },
+  {
+    id: 'unlock-melon', name: 'Melon Seeds', description: 'Unlock melon farming. Very slow but massive profit.',
+    cost: 250, category: 'crop', icon: '🍈', requiredTier: 4, maxPurchases: 1,
+  },
+  {
+    id: 'seed-pack-strawberry', name: 'Strawberry Seed Pack', description: 'Get 10 strawberry seeds.',
+    cost: 25, category: 'crop', icon: '🍓', requiredTier: 2, maxPurchases: 99,
+  },
+  {
+    id: 'seed-pack-sunflower', name: 'Sunflower Seed Pack', description: 'Get 6 sunflower seeds.',
+    cost: 40, category: 'crop', icon: '🌻', requiredTier: 3, maxPurchases: 99,
+  },
+  {
+    id: 'seed-pack-melon', name: 'Melon Seed Pack', description: 'Get 3 melon seeds.',
+    cost: 70, category: 'crop', icon: '🍈', requiredTier: 4, maxPurchases: 99,
   },
 ];

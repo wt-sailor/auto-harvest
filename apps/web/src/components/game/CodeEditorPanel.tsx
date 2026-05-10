@@ -5,14 +5,17 @@
 import { useRef, useCallback } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import { useAppSelector, useAppDispatch } from '../../store';
-import { setCurrentScript, setScriptRunning } from '../../store/slices/uiSlice';
+import { setScriptRunning } from '../../store/slices/uiSlice';
+import { setDroneScript, selectDrones, DEFAULT_DRONE_SCRIPT } from '../../store/slices/gameSlice';
 import { executeScript, stopScript } from '../../scripting/Sandbox';
 import { motion } from 'framer-motion';
-import { Play, Square, RotateCcw, Code2 } from 'lucide-react';
+import { Play, Square, RotateCcw, Code2, Bot } from 'lucide-react';
 
 export function CodeEditorPanel() {
   const dispatch = useAppDispatch();
-  const { currentScript, isScriptRunning } = useAppSelector((s) => s.ui);
+  const { isScriptRunning, selectedDroneForScript } = useAppSelector((s) => s.ui);
+  const drones = useAppSelector(selectDrones);
+  const selectedDrone = drones.find((d) => d.id === selectedDroneForScript);
   const editorRef = useRef<any>(null);
 
   const handleEditorMount: OnMount = (editor, monaco) => {
@@ -67,6 +70,7 @@ export function CodeEditorPanel() {
           { label: 'getInventory', kind: monaco.languages.CompletionItemKind.Function, insertText: 'getInventory()', detail: 'Get inventory contents', range },
           { label: 'getEnergy', kind: monaco.languages.CompletionItemKind.Function, insertText: 'getEnergy()', detail: 'Get active entity energy', range },
           { label: 'getDrones', kind: monaco.languages.CompletionItemKind.Function, insertText: 'getDrones()', detail: 'Get all drone statuses', range },
+          { label: 'getGridSize', kind: monaco.languages.CompletionItemKind.Function, insertText: 'getGridSize()', detail: 'Get farm grid dimensions {width, height}', range },
           { label: 'log', kind: monaco.languages.CompletionItemKind.Function, insertText: 'log(${1:message});', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Log to console', range },
           { label: 'wait', kind: monaco.languages.CompletionItemKind.Function, insertText: 'await wait(${1:5});', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Wait N ticks', range },
         ];
@@ -76,13 +80,25 @@ export function CodeEditorPanel() {
   };
 
   const handleRun = useCallback(async () => {
-    if (isScriptRunning) return;
-    await executeScript(currentScript);
-  }, [currentScript, isScriptRunning]);
+    if (isScriptRunning || !selectedDrone) return;
+    await executeScript(selectedDrone.script || '', { targetDroneId: selectedDrone.id });
+  }, [selectedDrone, isScriptRunning]);
 
   const handleReset = useCallback(() => {
-    dispatch(setCurrentScript(`// AutoHarvest Script\nawait moveRight();\nawait plant("wheat");\nlog("Hello, farmer!");\n`));
-  }, [dispatch]);
+    if (selectedDrone) {
+      dispatch(setDroneScript({ droneId: selectedDrone.id, script: DEFAULT_DRONE_SCRIPT }));
+    }
+  }, [dispatch, selectedDrone]);
+
+  if (!selectedDrone) {
+    return (
+      <div className="glass-panel-dark flex flex-col h-full overflow-hidden items-center justify-center p-6 text-center">
+        <Bot className="w-12 h-12 text-farm-700 mb-4 mx-auto" />
+        <h3 className="text-farm-300 font-display font-semibold mb-2">No Drone Selected</h3>
+        <p className="text-farm-500 text-sm">Go to the Drones tab and select a drone to edit its autonomous script. The farmer cannot be scripted.</p>
+      </div>
+    );
+  }
 
   return (
     <motion.div
@@ -95,7 +111,7 @@ export function CodeEditorPanel() {
       <div className="flex items-center justify-between px-3 py-2 border-b border-farm-800/40">
         <div className="flex items-center gap-2">
           <Code2 className="w-4 h-4 text-olive-400" />
-          <span className="text-sm font-medium text-farm-300">Script Editor</span>
+          <span className="text-sm font-medium text-farm-300">Script: {selectedDrone.name}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <motion.button whileHover={{ scale: 1.1, rotate: -90 }} whileTap={{ scale: 0.9 }}
@@ -128,8 +144,8 @@ export function CodeEditorPanel() {
         <Editor
           height="100%"
           defaultLanguage="javascript"
-          value={currentScript}
-          onChange={(value) => dispatch(setCurrentScript(value || ''))}
+          value={selectedDrone.script || ''}
+          onChange={(value) => selectedDrone && dispatch(setDroneScript({ droneId: selectedDrone.id, script: value || '' }))}
           onMount={handleEditorMount}
           options={{
             minimap: { enabled: false }, fontSize: 13,

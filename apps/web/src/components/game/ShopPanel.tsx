@@ -54,6 +54,9 @@ export function ShopPanel() {
       case 'unlock-potato': dispatch(addItem({ type: 'seed_potato', quantity: 8 })); break;
       case 'unlock-tomato': dispatch(addItem({ type: 'seed_tomato', quantity: 6 })); break;
       case 'unlock-pumpkin': dispatch(addItem({ type: 'seed_pumpkin', quantity: 3 })); break;
+      case 'unlock-strawberry': dispatch(addItem({ type: 'seed_strawberry', quantity: 10 })); break;
+      case 'unlock-sunflower': dispatch(addItem({ type: 'seed_sunflower', quantity: 6 })); break;
+      case 'unlock-melon': dispatch(addItem({ type: 'seed_melon', quantity: 3 })); break;
       default: {
         // Handle seed packs generically: seed-pack-{crop} → seed_{crop}
         if (item.id.startsWith('seed-pack-')) {
@@ -64,6 +67,9 @@ export function ShopPanel() {
             'seed-pack-potato': 12,
             'seed-pack-tomato': 8,
             'seed-pack-pumpkin': 5,
+            'seed-pack-strawberry': 10,
+            'seed-pack-sunflower': 6,
+            'seed-pack-melon': 3,
           };
           const cropName = item.id.replace('seed-pack-', '');
           const qty = seedPackQuantities[item.id] || 10;

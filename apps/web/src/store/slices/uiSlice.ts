@@ -15,25 +15,10 @@ interface UIState {
   consoleLogs: ConsoleEntry[];
   maxConsoleLogs: number;
   isScriptRunning: boolean;
-  currentScript: string;
   selectedDroneForScript: string | null;
   selectedCropType: CropType;
 }
 
-const DEFAULT_SCRIPT = `// Welcome to AutoHarvest! 🌾
-// Write code to control your farming robot.
-// Available commands:
-//   moveUp(), moveDown(), moveLeft(), moveRight()
-//   plant("wheat"), harvest(), getTile(), getInventory()
-//   log("message")
-
-// Example: Move and plant
-await moveRight();
-await plant("wheat");
-await moveRight();
-await plant("wheat");
-log("Planted two wheat crops!");
-`;
 
 const initialState: UIState = {
   showConsole: true,
@@ -43,7 +28,6 @@ const initialState: UIState = {
   consoleLogs: [],
   maxConsoleLogs: 200,
   isScriptRunning: false,
-  currentScript: DEFAULT_SCRIPT,
   selectedDroneForScript: null,
   selectedCropType: 'wheat' as CropType,
 };
@@ -68,9 +52,6 @@ const uiSlice = createSlice({
     setScriptRunning(state, action: PayloadAction<boolean>) {
       state.isScriptRunning = action.payload;
     },
-    setCurrentScript(state, action: PayloadAction<string>) {
-      state.currentScript = action.payload;
-    },
     setSelectedDroneForScript(state, action: PayloadAction<string | null>) {
       state.selectedDroneForScript = action.payload;
     },
@@ -82,7 +63,7 @@ const uiSlice = createSlice({
 
 export const {
   toggleConsole, toggleEditor, toggleInventory, setActivePanel,
-  addConsoleLog, clearConsole, setScriptRunning, setCurrentScript,
+  addConsoleLog, clearConsole, setScriptRunning,
   setSelectedDroneForScript, setSelectedCropType,
 } = uiSlice.actions;
 export const uiReducer = uiSlice.reducer;
