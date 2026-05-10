@@ -5,7 +5,6 @@
 import { useRef, useCallback } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import { useAppSelector, useAppDispatch } from '../../store';
-import { setScriptRunning } from '../../store/slices/uiSlice';
 import { setDroneScript, selectDrones, DEFAULT_DRONE_SCRIPT } from '../../store/slices/gameSlice';
 import { executeScript, stopScript } from '../../scripting/Sandbox';
 import { motion } from 'framer-motion';
@@ -56,23 +55,122 @@ export function CodeEditorPanel() {
     monaco.languages.registerCompletionItemProvider('javascript', {
       provideCompletionItems: (model: any, position: any) => {
         const word = model.getWordUntilPosition(position);
-        const range = { startLineNumber: position.lineNumber, endLineNumber: position.lineNumber, startColumn: word.startColumn, endColumn: word.endColumn };
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: word.startColumn,
+          endColumn: word.endColumn,
+        };
         const suggestions = [
-          { label: 'moveUp', kind: monaco.languages.CompletionItemKind.Function, insertText: 'await moveUp();', detail: 'Move active entity up one tile', range },
-          { label: 'moveDown', kind: monaco.languages.CompletionItemKind.Function, insertText: 'await moveDown();', detail: 'Move active entity down one tile', range },
-          { label: 'moveLeft', kind: monaco.languages.CompletionItemKind.Function, insertText: 'await moveLeft();', detail: 'Move active entity left one tile', range },
-          { label: 'moveRight', kind: monaco.languages.CompletionItemKind.Function, insertText: 'await moveRight();', detail: 'Move active entity right one tile', range },
-          { label: 'plant', kind: monaco.languages.CompletionItemKind.Function, insertText: 'await plant("${1:wheat}");', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Plant a crop on current tile', range },
-          { label: 'harvest', kind: monaco.languages.CompletionItemKind.Function, insertText: 'await harvest();', detail: 'Harvest crop on current tile', range },
-          { label: 'getTile', kind: monaco.languages.CompletionItemKind.Function, insertText: 'getTile()', detail: 'Get current tile info', range },
-          { label: 'getTileAt', kind: monaco.languages.CompletionItemKind.Function, insertText: 'getTileAt(${1:x}, ${2:y})', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Get tile at coordinates', range },
-          { label: 'getPosition', kind: monaco.languages.CompletionItemKind.Function, insertText: 'getPosition()', detail: 'Get active entity position', range },
-          { label: 'getInventory', kind: monaco.languages.CompletionItemKind.Function, insertText: 'getInventory()', detail: 'Get inventory contents', range },
-          { label: 'getEnergy', kind: monaco.languages.CompletionItemKind.Function, insertText: 'getEnergy()', detail: 'Get active entity energy', range },
-          { label: 'getDrones', kind: monaco.languages.CompletionItemKind.Function, insertText: 'getDrones()', detail: 'Get all drone statuses', range },
-          { label: 'getGridSize', kind: monaco.languages.CompletionItemKind.Function, insertText: 'getGridSize()', detail: 'Get farm grid dimensions {width, height}', range },
-          { label: 'log', kind: monaco.languages.CompletionItemKind.Function, insertText: 'log(${1:message});', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Log to console', range },
-          { label: 'wait', kind: monaco.languages.CompletionItemKind.Function, insertText: 'await wait(${1:5});', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Wait N ticks', range },
+          {
+            label: 'moveUp',
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: 'await moveUp();',
+            detail: 'Move active entity up one tile',
+            range,
+          },
+          {
+            label: 'moveDown',
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: 'await moveDown();',
+            detail: 'Move active entity down one tile',
+            range,
+          },
+          {
+            label: 'moveLeft',
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: 'await moveLeft();',
+            detail: 'Move active entity left one tile',
+            range,
+          },
+          {
+            label: 'moveRight',
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: 'await moveRight();',
+            detail: 'Move active entity right one tile',
+            range,
+          },
+          {
+            label: 'plant',
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: 'await plant("${1:wheat}");',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: 'Plant a crop on current tile',
+            range,
+          },
+          {
+            label: 'harvest',
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: 'await harvest();',
+            detail: 'Harvest crop on current tile',
+            range,
+          },
+          {
+            label: 'getTile',
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: 'getTile()',
+            detail: 'Get current tile info',
+            range,
+          },
+          {
+            label: 'getTileAt',
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: 'getTileAt(${1:x}, ${2:y})',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: 'Get tile at coordinates',
+            range,
+          },
+          {
+            label: 'getPosition',
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: 'getPosition()',
+            detail: 'Get active entity position',
+            range,
+          },
+          {
+            label: 'getInventory',
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: 'getInventory()',
+            detail: 'Get inventory contents',
+            range,
+          },
+          {
+            label: 'getEnergy',
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: 'getEnergy()',
+            detail: 'Get active entity energy',
+            range,
+          },
+          {
+            label: 'getDrones',
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: 'getDrones()',
+            detail: 'Get all drone statuses',
+            range,
+          },
+          {
+            label: 'getGridSize',
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: 'getGridSize()',
+            detail: 'Get farm grid dimensions {width, height}',
+            range,
+          },
+          {
+            label: 'log',
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: 'log(${1:message});',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: 'Log to console',
+            range,
+          },
+          {
+            label: 'wait',
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: 'await wait(${1:5});',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: 'Wait N ticks',
+            range,
+          },
         ];
         return { suggestions };
       },
@@ -101,7 +199,7 @@ export function CodeEditorPanel() {
   }
 
   // If drones exist but none selected, select the first one
-  if (!selectedDrone && drones.length > 0) {
+  if (!selectedDrone) {
     dispatch({ type: 'ui/setSelectedDroneForScript', payload: drones[0].id });
     return null;
   }
@@ -135,17 +233,26 @@ export function CodeEditorPanel() {
       <div className="flex items-center justify-between px-3 py-2 border-b border-farm-800/40 bg-farm-900/10">
         <div className="flex items-center gap-2">
           <Code2 className="w-4 h-4 text-olive-400" />
-          <span className="text-sm font-medium text-farm-300">Scripting: {selectedDrone?.name}</span>
+          <span className="text-sm font-medium text-farm-300">
+            Scripting: {selectedDrone?.name}
+          </span>
         </div>
         <div className="flex items-center gap-1.5">
-          <motion.button whileHover={{ scale: 1.1, rotate: -90 }} whileTap={{ scale: 0.9 }}
-            onClick={handleReset} className="p-1.5 rounded-lg text-farm-500 hover:text-farm-300 hover:bg-farm-800/40 transition-all" title="Reset script">
+          <motion.button
+            whileHover={{ scale: 1.1, rotate: -90 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={handleReset}
+            className="p-1.5 rounded-lg text-farm-500 hover:text-farm-300 hover:bg-farm-800/40 transition-all"
+            title="Reset script"
+          >
             <RotateCcw className="w-3.5 h-3.5" />
           </motion.button>
           {isScriptRunning ? (
             <motion.button
-              initial={{ scale: 0.8 }} animate={{ scale: 1 }}
-              whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={stopScript}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/80 hover:bg-red-500/80 rounded-lg text-white text-xs font-medium transition-all"
             >
@@ -153,7 +260,8 @@ export function CodeEditorPanel() {
             </motion.button>
           ) : (
             <motion.button
-              whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={handleRun}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-olive-600/80 hover:bg-olive-500/80 rounded-lg text-white text-xs font-medium transition-all"
             >
@@ -169,19 +277,35 @@ export function CodeEditorPanel() {
           height="100%"
           defaultLanguage="javascript"
           value={selectedDrone.script || ''}
-          onChange={(value) => selectedDrone && dispatch(setDroneScript({ droneId: selectedDrone.id, script: value || '' }))}
+          onChange={(value) =>
+            selectedDrone &&
+            dispatch(setDroneScript({ droneId: selectedDrone.id, script: value || '' }))
+          }
           onMount={handleEditorMount}
           options={{
-            minimap: { enabled: false }, fontSize: 13,
+            minimap: { enabled: false },
+            fontSize: 13,
             fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-            lineNumbers: 'on', roundedSelection: true, scrollBeyondLastLine: false,
-            automaticLayout: true, padding: { top: 12, bottom: 12 },
-            suggestOnTriggerCharacters: true, quickSuggestions: true,
-            wordWrap: 'on', tabSize: 2, renderLineHighlight: 'gutter',
-            cursorBlinking: 'smooth', cursorSmoothCaretAnimation: 'on',
-            smoothScrolling: true, contextmenu: false,
+            lineNumbers: 'on',
+            roundedSelection: true,
+            scrollBeyondLastLine: false,
+            automaticLayout: true,
+            padding: { top: 12, bottom: 12 },
+            suggestOnTriggerCharacters: true,
+            quickSuggestions: true,
+            wordWrap: 'on',
+            tabSize: 2,
+            renderLineHighlight: 'gutter',
+            cursorBlinking: 'smooth',
+            cursorSmoothCaretAnimation: 'on',
+            smoothScrolling: true,
+            contextmenu: false,
           }}
-          loading={<div className="flex items-center justify-center h-full text-farm-500 text-sm">Loading editor...</div>}
+          loading={
+            <div className="flex items-center justify-center h-full text-farm-500 text-sm">
+              Loading editor...
+            </div>
+          }
         />
       </div>
     </motion.div>
