@@ -1,52 +1,9 @@
-version: '3.8'
-
 services:
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: ${DATABASE_USER:-postgres}
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-postgres}
-      POSTGRES_DB: ${DATABASE_NAME:-autoharvest}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  backend:
+  app:
     build:
       context: .
-      dockerfile: Dockerfile.server
-    environment:
-      - DATABASE_HOST=postgres
-      - DATABASE_PORT=5432
-      - DATABASE_USER=${DATABASE_USER:-postgres}
-      - DATABASE_PASSWORD=${DATABASE_PASSWORD:-postgres}
-      - DATABASE_NAME=${DATABASE_NAME:-autoharvest}
-      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
-      - JWT_EXPIRATION=${JWT_EXPIRATION:-1h}
-      - JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION:-7d}
-      - SERVER_PORT=3001
-    depends_on:
-      - postgres
-    ports:
-      - "3001:3001"
-
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.web
-    ports:
-      - "8080:80"
-
-  nginx:
-    image: nginx:alpine
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      dockerfile: Dockerfile
     ports:
       - "3210:3210"
-    depends_on:
-      - frontend
-      - backend
-
-volumes:
-  postgres_data:
+    env_file:
+      - apps/server/.env
