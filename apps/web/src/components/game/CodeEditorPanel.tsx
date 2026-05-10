@@ -51,7 +51,7 @@ export function CodeEditorPanel() {
 
     // Autocomplete for game API
     monaco.languages.registerCompletionItemProvider('javascript', {
-      provideCompletionItems: (model, position) => {
+      provideCompletionItems: (model: any, position: any) => {
         const word = model.getWordUntilPosition(position);
         const range = { startLineNumber: position.lineNumber, endLineNumber: position.lineNumber, startColumn: word.startColumn, endColumn: word.endColumn };
         const suggestions = [
