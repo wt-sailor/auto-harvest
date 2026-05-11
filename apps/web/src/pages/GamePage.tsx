@@ -16,8 +16,9 @@ import {
   selectTier,
   selectIsScriptUnlocked,
   loadProgression,
+  resetProgression,
 } from '../store/slices/progressionSlice';
-import { selectDrones, loadSerializedState } from '../store/slices/gameSlice';
+import { selectDrones, loadSerializedState, initWorld } from '../store/slices/gameSlice';
 import { setActivePanel, type ActivePanel, addConsoleLog } from '../store/slices/uiSlice';
 import { runAutonomousDroneLoop, stopAutonomousDroneLoop } from '../scripting/Sandbox';
 import { worldsApi } from '../api/apiClient';
@@ -62,6 +63,11 @@ export function GamePage() {
 
     const loadWorld = async () => {
       setLoadingWorld(true);
+      
+      // Clear old state before loading
+      dispatch(initWorld());
+      dispatch(resetProgression());
+
       try {
         // Get world info
         const world = await worldsApi.get(worldId);

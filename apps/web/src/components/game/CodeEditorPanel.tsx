@@ -5,8 +5,7 @@
 import { useRef, useCallback } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import { useAppSelector, useAppDispatch } from '../../store';
-import { setDroneScript, selectDrones, DEFAULT_DRONE_SCRIPT } from '../../store/slices/gameSlice';
-import { executeScript, stopScript } from '../../scripting/Sandbox';
+import { setDroneScript, setDroneStatus, selectDrones, DEFAULT_DRONE_SCRIPT } from '../../store/slices/gameSlice';
 import { motion } from 'framer-motion';
 import { Play, Square, RotateCcw, Code2, Bot } from 'lucide-react';
 
@@ -164,6 +163,22 @@ export function CodeEditorPanel() {
             range,
           },
           {
+            label: 'getItemCount',
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: 'getItemCount("${1:seed_wheat}")',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: 'Get quantity of a specific item or crop',
+            range,
+          },
+          {
+            label: 'moveTo',
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: 'await moveTo(${1:x}, ${2:y});',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: 'Navigate directly to specific coordinates',
+            range,
+          },
+          {
             label: 'wait',
             kind: monaco.languages.CompletionItemKind.Function,
             insertText: 'await wait(${1:5});',
@@ -177,10 +192,15 @@ export function CodeEditorPanel() {
     });
   };
 
-  const handleRun = useCallback(async () => {
-    if (isScriptRunning || !selectedDrone) return;
-    await executeScript(selectedDrone.script || '', { targetDroneId: selectedDrone.id });
-  }, [selectedDrone, isScriptRunning]);
+  const handleRun = useCallback(() => {
+    if (!selectedDrone) return;
+    dispatch(setDroneStatus({ droneId: selectedDrone.id, status: 'scripted' }));
+  }, [selectedDrone, dispatch]);
+
+  const handleStop = useCallback(() => {
+    if (!selectedDrone) return;
+    dispatch(setDroneStatus({ droneId: selectedDrone.id, status: 'idle' }));
+  }, [selectedDrone, dispatch]);
 
   const handleReset = useCallback(() => {
     if (selectedDrone) {
@@ -247,13 +267,13 @@ export function CodeEditorPanel() {
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </motion.button>
-          {isScriptRunning ? (
+          {selectedDrone?.status === 'scripted' ? (
             <motion.button
               initial={{ scale: 0.8 }}
               animate={{ scale: 1 }}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={stopScript}
+              onClick={handleStop}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/80 hover:bg-red-500/80 rounded-lg text-white text-xs font-medium transition-all"
             >
               <Square className="w-3 h-3" /> Stop

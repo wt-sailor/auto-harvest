@@ -9,6 +9,7 @@ import {
   Sprout, Bot, Code2, Wheat, Zap, ArrowRight, Gamepad2,
   Keyboard, Terminal, Lightbulb, ChevronRight, Layers,
 } from 'lucide-react';
+import { CROP_DEFINITIONS } from '@autoharvest/shared';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
@@ -33,12 +34,14 @@ const apiCommands = [
   { name: 'await moveDown()', desc: 'Move robot one tile down', category: 'movement' },
   { name: 'await moveLeft()', desc: 'Move robot one tile left', category: 'movement' },
   { name: 'await moveRight()', desc: 'Move robot one tile right', category: 'movement' },
+  { name: 'await moveTo(x, y)', desc: 'Navigate to exact coordinates', category: 'movement' },
   { name: 'await plant("wheat")', desc: 'Plant a crop on current tile', category: 'farming' },
   { name: 'await harvest()', desc: 'Harvest ready crop', category: 'farming' },
   { name: 'getTile()', desc: 'Get info about current tile', category: 'info' },
   { name: 'getTileAt(x, y)', desc: 'Get tile at coordinates', category: 'info' },
   { name: 'getPosition()', desc: 'Get robot position & direction', category: 'info' },
   { name: 'getInventory()', desc: 'Get all items in inventory', category: 'info' },
+  { name: 'getItemCount("item")', desc: 'Get quantity of a specific item', category: 'info' },
   { name: 'getEnergy()', desc: 'Get current/max energy', category: 'info' },
   { name: 'getDrones()', desc: 'Get array of all drones', category: 'info' },
   { name: 'getGridSize()', desc: 'Get farm {width, height}', category: 'info' },
@@ -46,17 +49,14 @@ const apiCommands = [
   { name: 'await wait(n)', desc: 'Wait for n game ticks', category: 'utility' },
 ];
 
-const crops = [
-  { emoji: '🌾', name: 'Wheat', growth: '50 ticks', yield: 3, cost: 5, sell: 4 },
-  { emoji: '🥕', name: 'Carrot', growth: '40 ticks', yield: 4, cost: 3, sell: 3 },
-  { emoji: '🌽', name: 'Corn', growth: '80 ticks', yield: 2, cost: 10, sell: 8 },
-  { emoji: '🥔', name: 'Potato', growth: '60 ticks', yield: 3, cost: 4, sell: 5 },
-  { emoji: '🍅', name: 'Tomato', growth: '70 ticks', yield: 5, cost: 8, sell: 6 },
-  { emoji: '🎃', name: 'Pumpkin', growth: '120 ticks', yield: 1, cost: 20, sell: 30 },
-  { emoji: '🍓', name: 'Strawberry', growth: '35 ticks', yield: 6, cost: 6, sell: 4 },
-  { emoji: '🌻', name: 'Sunflower', growth: '90 ticks', yield: 2, cost: 15, sell: 12 },
-  { emoji: '🍈', name: 'Melon', growth: '150 ticks', yield: 1, cost: 30, sell: 50 },
-];
+const crops = Object.values(CROP_DEFINITIONS).map(c => ({
+  emoji: c.emoji,
+  name: c.name,
+  growth: `${c.growthTicks} ticks`,
+  yield: c.yield,
+  cost: c.seedCost,
+  sell: c.sellPrice,
+}));
 
 const tips = [
   'Start with wheat — it\'s cheap and grows fast',
@@ -193,6 +193,13 @@ export function GuidePage() {
           <motion.h2 variants={fadeUp} custom={0} className="font-display font-bold text-2xl text-farm-100 mb-6 flex items-center gap-2">
             <Terminal className="w-6 h-6 text-olive-400" /> Script API Reference
           </motion.h2>
+
+          <motion.div variants={fadeUp} custom={0} className="glass-panel p-5 mb-6 border-l-4 border-l-olive-500">
+            <h3 className="font-display font-semibold text-lg text-farm-100 mb-2">JavaScript Supported!</h3>
+            <p className="text-farm-400 text-sm leading-relaxed">
+              You can use standard JavaScript syntax in your scripts. This includes <code className="text-olive-300 bg-farm-900/60 px-1 py-0.5 rounded">for</code> loops, <code className="text-olive-300 bg-farm-900/60 px-1 py-0.5 rounded">while</code> loops, <code className="text-olive-300 bg-farm-900/60 px-1 py-0.5 rounded">if/else</code> conditions, and variables. Drone scripts containing infinite loops (e.g., <code className="text-olive-300 bg-farm-900/60 px-1 py-0.5 rounded">while(true)</code>) will run indefinitely in the background until manually stopped.
+            </p>
+          </motion.div>
           <div className="space-y-3">
             {['movement', 'farming', 'info', 'utility'].map((cat) => (
               <motion.div key={cat} variants={fadeUp} custom={0} className="glass-panel p-4">
@@ -215,14 +222,17 @@ export function GuidePage() {
           </div>
         </motion.section>
 
-        {/* Example Script */}
+        {/* Example Scripts */}
         <motion.section initial="hidden" whileInView="visible" viewport={{ once: true }} className="mb-16">
           <motion.h2 variants={fadeUp} custom={0} className="font-display font-bold text-2xl text-farm-100 mb-6 flex items-center gap-2">
-            <Code2 className="w-6 h-6 text-olive-400" /> Example Script
+            <Code2 className="w-6 h-6 text-olive-400" /> Example Scripts
           </motion.h2>
-          <motion.div variants={fadeUp} custom={1} className="glass-panel-dark p-5 overflow-hidden">
-            <pre className="font-mono text-sm text-farm-300 leading-relaxed overflow-x-auto">
-              <code>{`// Auto-plant a row and harvest
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <motion.div variants={fadeUp} custom={1} className="glass-panel-dark p-5 flex flex-col h-full">
+              <h3 className="font-display font-semibold text-farm-200 mb-3 text-sm uppercase tracking-wider">Linear Row Farming</h3>
+              <pre className="font-mono text-[13px] text-farm-300 leading-relaxed overflow-x-auto bg-[#141312] p-4 rounded-lg flex-1 border border-farm-800/40">
+                <code>{`// Auto-plant a row and harvest
 for (let i = 0; i < 8; i++) {
   await moveRight();
   await plant("wheat");
@@ -237,10 +247,39 @@ for (let i = 0; i < 8; i++) {
   await harvest();
 }
 
-log("Harvest complete!");
-log(getInventory());`}</code>
-            </pre>
-          </motion.div>
+log("Harvest complete!");`}</code>
+              </pre>
+            </motion.div>
+
+            <motion.div variants={fadeUp} custom={2} className="glass-panel-dark p-5 flex flex-col h-full">
+              <h3 className="font-display font-semibold text-farm-200 mb-3 text-sm uppercase tracking-wider">Continuous Autonomous Drone</h3>
+              <pre className="font-mono text-[13px] text-farm-300 leading-relaxed overflow-x-auto bg-[#141312] p-4 rounded-lg flex-1 border border-farm-800/40">
+                <code>{`// Continuous background farming loop
+while (true) {
+  // Check if we have seeds
+  if (getItemCount("seed_wheat") == 0) {
+    log("Out of seeds! Stopping.");
+    break; // Stop the script
+  }
+
+  // Go to starting position
+  await moveTo(2, 2);
+  
+  // Plant and harvest a 3x3 grid
+  for(let y = 0; y < 3; y++) {
+    for(let x = 0; x < 3; x++) {
+      await moveTo(2 + x, 2 + y);
+      await harvest();
+      await plant("wheat");
+    }
+  }
+  
+  // Wait before the next cycle
+  await wait(50);
+}`}</code>
+              </pre>
+            </motion.div>
+          </div>
         </motion.section>
 
         {/* Tips */}

@@ -17,8 +17,19 @@ interface ExecutionResult {
   instructionsExecuted: number;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
+async function sleep(ms: number, droneId?: string): Promise<void> {
+  const step = 50;
+  let elapsed = 0;
+  while (elapsed < ms) {
+    if (droneId && stopSignals.get(droneId)) {
+      throw new Error('Script stopped by user.');
+    }
+    if (!droneId && stopSignals.get('manual')) {
+      throw new Error('Script stopped by user.');
+    }
+    await new Promise((r) => setTimeout(r, Math.min(step, ms - elapsed)));
+    elapsed += step;
+  }
 }
 
 /**
@@ -38,9 +49,9 @@ export async function executeScript(code: string, options?: { targetDroneId?: st
 
   const checkLimit = () => {
     instructionCount++;
-    if (instructionCount > MAX_INSTRUCTIONS_PER_RUN) {
-      throw new Error(`Instruction limit exceeded (${MAX_INSTRUCTIONS_PER_RUN}). Script stopped.`);
-    }
+    // We allow infinite loops now since transformLoops yields to the event loop
+    // and manual termination is handled via stopSignals.
+
     if (options?.targetDroneId && stopSignals.get(options.targetDroneId)) {
       throw new Error('Script stopped by user.');
     }
@@ -89,7 +100,7 @@ export async function executeScript(code: string, options?: { targetDroneId?: st
     const after = getTarget();
     const moved = after ? (after.x !== bx || after.y !== by) : false;
     if (!moved) addLog(`⚠ Cannot move ${dir}`, 'warn');
-    await sleep(commandDelay);
+    await sleep(commandDelay, getDroneId());
     return moved;
   };
 
@@ -113,7 +124,7 @@ export async function executeScript(code: string, options?: { targetDroneId?: st
       const planted = after > before;
       if (planted) addLog(`🌱 Planted ${cropType}`, 'success');
       else addLog(`⚠ Cannot plant ${cropType}`, 'warn');
-      await sleep(commandDelay);
+      await sleep(commandDelay, getDroneId());
       return planted;
     },
 
@@ -138,7 +149,7 @@ export async function executeScript(code: string, options?: { targetDroneId?: st
       } else {
         addLog('⚠ Nothing to harvest here', 'warn');
       }
-      await sleep(commandDelay);
+      await sleep(commandDelay, getDroneId());
       return harvested;
     },
 
@@ -188,9 +199,73 @@ export async function executeScript(code: string, options?: { targetDroneId?: st
       addLog(msg, 'info');
     },
 
+    getItemCount: (itemType: string) => {
+      checkLimit();
+      return store.getState().game.inventory.items[itemType] || 0;
+    },
+
+    moveTo: async (targetX: number, targetY: number) => {
+      checkLimit();
+      let target = getTarget();
+      if (!target) return false;
+      
+      const { gridWidth, gridHeight } = store.getState().game;
+      if (targetX < 0 || targetX >= gridWidth || targetY < 0 || targetY >= gridHeight) {
+        addLog(`⚠ Target (${targetX}, ${targetY}) out of bounds`, 'warn');
+        return false;
+      }
+
+      let steps = 0;
+      const maxSteps = 100;
+      
+      while ((target.x !== targetX || target.y !== targetY) && steps < maxSteps) {
+        checkLimit();
+        if (options?.targetDroneId && stopSignals.get(options.targetDroneId)) throw new Error('Script stopped by user.');
+        
+        let dir: 'up' | 'down' | 'left' | 'right' | null = null;
+        if (target.x < targetX) dir = 'right';
+        else if (target.x > targetX) dir = 'left';
+        else if (target.y < targetY) dir = 'down';
+        else if (target.y > targetY) dir = 'up';
+        
+        if (dir) {
+          const success = await doMove(dir);
+          if (!success) {
+            let altDir: 'up' | 'down' | 'left' | 'right' | null = null;
+            if (dir === 'left' || dir === 'right') {
+              if (target.y < targetY) altDir = 'down';
+              else if (target.y > targetY) altDir = 'up';
+              else altDir = target.y > 0 ? 'up' : 'down';
+            } else {
+              if (target.x < targetX) altDir = 'right';
+              else if (target.x > targetX) altDir = 'left';
+              else altDir = target.x > 0 ? 'left' : 'right';
+            }
+            if (altDir) {
+              const altSuccess = await doMove(altDir);
+              if (!altSuccess) {
+                 addLog(`⚠ Path to (${targetX}, ${targetY}) completely blocked`, 'warn');
+                 return false;
+              }
+            } else {
+              return false;
+            }
+          }
+        }
+        target = getTarget()!;
+        steps++;
+      }
+      
+      if (target.x === targetX && target.y === targetY) {
+        addLog(`📍 Reached (${targetX}, ${targetY})`, 'info');
+        return true;
+      }
+      return false;
+    },
+
     wait: async (ticks: number) => {
       checkLimit();
-      await sleep(Math.min(ticks * 100, 5000));
+      await sleep(Math.min(ticks * 100, 5000), getDroneId());
     },
 
     getGridSize: () => {
@@ -217,11 +292,7 @@ export async function executeScript(code: string, options?: { targetDroneId?: st
       `"use strict";\n${transformedCode}`,
     );
 
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error(`Script timed out after ${SCRIPT_TIMEOUT_MS}ms`)), SCRIPT_TIMEOUT_MS);
-    });
-
-    await Promise.race([sandboxedFn(...Object.values(api), checkLimit), timeoutPromise]);
+    await sandboxedFn(...Object.values(api), checkLimit);
 
     if (!options?.isAutonomous) {
       addLog(`✅ Script completed (${instructionCount} instructions)`, 'success');
@@ -263,20 +334,22 @@ export async function runAutonomousDroneLoop(droneId: string, code: string) {
   activeAutonomousLoops.add(droneId);
   stopSignals.set(droneId, false);
 
-  while (!stopSignals.get(droneId)) {
-    const drone = store.getState().game.drones.find(d => d.id === droneId);
-    if (!drone || drone.status !== 'scripted') {
-      break;
-    }
+  const drone = store.getState().game.drones.find(d => d.id === droneId);
+  if (!drone || drone.status !== 'scripted') {
+    activeAutonomousLoops.delete(droneId);
+    return;
+  }
 
-    const result = await executeScript(code, { targetDroneId: droneId, isAutonomous: true });
+  const result = await executeScript(code, { targetDroneId: droneId, isAutonomous: true });
 
-    if (!result.success) {
-      store.dispatch(addConsoleLog({ id: uuid(), message: `⚠ Drone ${drone.name} script error, stopping auto mode.`, type: 'warn', timestamp: Date.now() }));
-      store.dispatch(setDroneStatus({ droneId, status: 'idle' }));
-      break;
-    }
-    await sleep(500); // Wait briefly before restarting script loop
+  if (!result.success && result.error !== 'Script stopped by user.') {
+    store.dispatch(addConsoleLog({ id: uuid(), message: `⚠ Drone ${drone.name} script error.`, type: 'warn', timestamp: Date.now() }));
+  }
+
+  // Once script finishes or errors out, set status back to idle if it's still scripted
+  const currentDrone = store.getState().game.drones.find(d => d.id === droneId);
+  if (currentDrone && currentDrone.status === 'scripted') {
+    store.dispatch(setDroneStatus({ droneId, status: 'idle' }));
   }
 
   activeAutonomousLoops.delete(droneId);
