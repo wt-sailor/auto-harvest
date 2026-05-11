@@ -57,7 +57,27 @@ export class GameEngine {
     const dt = (now - this.lastFrameTime) / 1000;
     this.lastFrameTime = now;
 
-    store.dispatch(updateEntityVisuals(dt));
+    const state = store.getState().game;
+
+    // Only dispatch visual updates if something is actually moving
+    let needsInterpolation = false;
+    const isMoving = (vX: number, vY: number, tX: number, tY: number) => 
+      Math.abs(vX - tX) > 0.001 || Math.abs(vY - tY) > 0.001;
+
+    if (isMoving(state.farmer.visualX, state.farmer.visualY, state.farmer.x, state.farmer.y)) {
+      needsInterpolation = true;
+    } else {
+      for (const drone of state.drones) {
+        if (isMoving(drone.visualX, drone.visualY, drone.x, drone.y)) {
+          needsInterpolation = true;
+          break;
+        }
+      }
+    }
+
+    if (needsInterpolation) {
+      store.dispatch(updateEntityVisuals(dt));
+    }
 
     if (this.renderer) {
       const state = store.getState().game;
