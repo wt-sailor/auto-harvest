@@ -82,6 +82,8 @@ export interface DroneState {
   status: DroneStatus;
   assignedZoneId: string | null;
   script: string | null;
+  plotId: number;
+  loopScript?: boolean;
 }
 
 /** A farm zone that a drone can be assigned to */

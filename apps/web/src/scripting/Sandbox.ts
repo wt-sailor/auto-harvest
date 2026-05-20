@@ -6,7 +6,7 @@ import { store } from '../store';
 import { moveRobot, moveDrone, plantCrop, harvestCrop, setDroneStatus } from '../store/slices/gameSlice';
 import { earnGold } from '../store/slices/progressionSlice';
 import { addConsoleLog, setScriptRunning } from '../store/slices/uiSlice';
-import type { CropType, ConsoleEntry } from '@autoharvest/shared';
+import type { CropType, ConsoleEntry, TileState } from '@autoharvest/shared';
 import { MAX_INSTRUCTIONS_PER_RUN, SCRIPT_TIMEOUT_MS, CROP_DEFINITIONS } from '@autoharvest/shared';
 import { v4 as uuid } from 'uuid';
 
@@ -76,10 +76,26 @@ export async function executeScript(code: string, options?: { targetDroneId?: st
     if (options?.targetDroneId) return true;
     return store.getState().game.controlMode === 'drone';
   };
-
   const getDroneId = (): string | undefined => {
     if (options?.targetDroneId) return options.targetDroneId;
     return store.getState().game.activeDroneId || undefined;
+  };
+
+  const getDronePlotId = (): number => {
+    const droneId = getDroneId();
+    if (droneId) {
+      const drone = store.getState().game.drones.find((d) => d.id === droneId);
+      if (drone) return drone.plotId || 1;
+    }
+    return store.getState().game.activePlotId;
+  };
+
+  const getPlotTiles = (plotId: number): TileState[][] => {
+    const state = store.getState().game;
+    if (plotId === state.activePlotId) {
+      return state.tiles;
+    }
+    return state.plots[plotId]?.tiles || state.tiles;
   };
 
   // ── Movement helpers ──
@@ -157,13 +173,18 @@ export async function executeScript(code: string, options?: { targetDroneId?: st
       checkLimit();
       const target = getTarget();
       if (!target) return null;
-      return store.getState().game.tiles[target.y]?.[target.x] || null;
+      const plotId = getDronePlotId();
+      return getPlotTiles(plotId)[target.y]?.[target.x] || null;
     },
 
     getTileAt: (x: number, y: number) => {
       checkLimit();
-      const { tiles, gridWidth, gridHeight } = store.getState().game;
-      if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) return null;
+      const plotId = getDronePlotId();
+      const state = store.getState().game;
+      const { tiles, gridWidth, gridHeight } = plotId === state.activePlotId
+        ? { tiles: state.tiles, gridWidth: state.gridWidth, gridHeight: state.gridHeight }
+        : { tiles: state.plots[plotId]?.tiles || [], gridWidth: state.plots[plotId]?.gridWidth || 0, gridHeight: state.plots[plotId]?.gridHeight || 0 };
+      if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight || !tiles[y]) return null;
       return { ...tiles[y][x] };
     },
 
@@ -189,7 +210,7 @@ export async function executeScript(code: string, options?: { targetDroneId?: st
     getDrones: () => {
       checkLimit();
       return store.getState().game.drones.map((d) => ({
-        id: d.id, name: d.name, x: d.x, y: d.y, status: d.status, energy: d.energy,
+        id: d.id, name: d.name, x: d.x, y: d.y, status: d.status, energy: d.energy, plotId: d.plotId || 1,
       }));
     },
 
@@ -209,7 +230,11 @@ export async function executeScript(code: string, options?: { targetDroneId?: st
       let target = getTarget();
       if (!target) return false;
       
-      const { gridWidth, gridHeight } = store.getState().game;
+      const plotId = getDronePlotId();
+      const state = store.getState().game;
+      const { gridWidth, gridHeight } = plotId === state.activePlotId
+        ? { gridWidth: state.gridWidth, gridHeight: state.gridHeight }
+        : { gridWidth: state.plots[plotId]?.gridWidth || 0, gridHeight: state.plots[plotId]?.gridHeight || 0 };
       if (targetX < 0 || targetX >= gridWidth || targetY < 0 || targetY >= gridHeight) {
         addLog(`⚠ Target (${targetX}, ${targetY}) out of bounds`, 'warn');
         return false;
@@ -217,7 +242,7 @@ export async function executeScript(code: string, options?: { targetDroneId?: st
 
       let steps = 0;
       const maxSteps = 100;
-      
+
       while ((target.x !== targetX || target.y !== targetY) && steps < maxSteps) {
         checkLimit();
         if (options?.targetDroneId && stopSignals.get(options.targetDroneId)) throw new Error('Script stopped by user.');
@@ -267,10 +292,13 @@ export async function executeScript(code: string, options?: { targetDroneId?: st
       checkLimit();
       await sleep(Math.min(ticks * 100, 5000), getDroneId());
     },
-
     getGridSize: () => {
       checkLimit();
-      const { gridWidth, gridHeight } = store.getState().game;
+      const plotId = getDronePlotId();
+      const state = store.getState().game;
+      const { gridWidth, gridHeight } = plotId === state.activePlotId
+        ? { gridWidth: state.gridWidth, gridHeight: state.gridHeight }
+        : { gridWidth: state.plots[plotId]?.gridWidth || 0, gridHeight: state.plots[plotId]?.gridHeight || 0 };
       return { width: gridWidth, height: gridHeight };
     },
   };
@@ -334,26 +362,43 @@ export async function runAutonomousDroneLoop(droneId: string, code: string) {
   activeAutonomousLoops.add(droneId);
   stopSignals.set(droneId, false);
 
-  const drone = store.getState().game.drones.find(d => d.id === droneId);
-  if (!drone || drone.status !== 'scripted') {
+  try {
+    while (true) {
+      const drone = store.getState().game.drones.find(d => d.id === droneId);
+      if (!drone || drone.status !== 'scripted' || stopSignals.get(droneId)) {
+        break;
+      }
+
+      const result = await executeScript(code, { targetDroneId: droneId, isAutonomous: true });
+
+      if (!result.success && result.error !== 'Script stopped by user.') {
+        store.dispatch(addConsoleLog({
+          id: uuid(),
+          message: `⚠ Drone ${drone.name} script error: ${result.error || ''}`,
+          type: 'warn',
+          timestamp: Date.now()
+        }));
+        // Wait 2 seconds before looping again after an error to avoid spamming
+        await new Promise(r => setTimeout(r, 2000));
+      }
+
+      const currentDrone = store.getState().game.drones.find(d => d.id === droneId);
+      if (!currentDrone || currentDrone.status !== 'scripted' || !currentDrone.loopScript) {
+        break;
+      }
+
+      // Small pause between loop iterations
+      await new Promise(r => setTimeout(r, 200));
+    }
+  } finally {
+    const currentDrone = store.getState().game.drones.find(d => d.id === droneId);
+    if (currentDrone && currentDrone.status === 'scripted') {
+      store.dispatch(setDroneStatus({ droneId, status: 'idle' }));
+    }
+
     activeAutonomousLoops.delete(droneId);
-    return;
+    stopSignals.delete(droneId);
   }
-
-  const result = await executeScript(code, { targetDroneId: droneId, isAutonomous: true });
-
-  if (!result.success && result.error !== 'Script stopped by user.') {
-    store.dispatch(addConsoleLog({ id: uuid(), message: `⚠ Drone ${drone.name} script error.`, type: 'warn', timestamp: Date.now() }));
-  }
-
-  // Once script finishes or errors out, set status back to idle if it's still scripted
-  const currentDrone = store.getState().game.drones.find(d => d.id === droneId);
-  if (currentDrone && currentDrone.status === 'scripted') {
-    store.dispatch(setDroneStatus({ droneId, status: 'idle' }));
-  }
-
-  activeAutonomousLoops.delete(droneId);
-  stopSignals.delete(droneId);
 }
 
 export function stopAutonomousDroneLoop(droneId: string) {

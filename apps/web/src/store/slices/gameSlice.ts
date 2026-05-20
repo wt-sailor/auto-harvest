@@ -87,7 +87,7 @@ function createFarmer(): FarmerState {
   };
 }
 
-function createDrone(id: string, name: string, x: number, y: number): DroneState {
+function createDrone(id: string, name: string, x: number, y: number, plotId: number = 1): DroneState {
   return {
     id, name, x, y,
     direction: 'right' as Direction,
@@ -96,6 +96,8 @@ function createDrone(id: string, name: string, x: number, y: number): DroneState
     status: 'idle' as DroneStatus,
     assignedZoneId: null,
     script: DEFAULT_DRONE_SCRIPT,
+    plotId,
+    loopScript: false,
   };
 }
 
@@ -134,6 +136,14 @@ function tryMoveEntity(
 
 // ─── State Interface ──────────────────────────────────────
 
+export interface PlotState {
+  gridWidth: number;
+  gridHeight: number;
+  tiles: TileState[][];
+  farmer: FarmerState;
+  farmZones: FarmZone[];
+}
+
 interface GameState {
   gridWidth: number;
   gridHeight: number;
@@ -149,6 +159,8 @@ interface GameState {
   tickRate: number;
   totalHarvested: number;
   totalPlanted: number;
+  activePlotId: number;
+  plots: Record<number, PlotState>;
 }
 
 const initialState: GameState = {
@@ -166,6 +178,23 @@ const initialState: GameState = {
   tickRate: 10,
   totalHarvested: 0,
   totalPlanted: 0,
+  activePlotId: 1,
+  plots: {
+    1: {
+      gridWidth: DEFAULT_GRID_WIDTH,
+      gridHeight: DEFAULT_GRID_HEIGHT,
+      tiles: createInitialTiles(DEFAULT_GRID_WIDTH, DEFAULT_GRID_HEIGHT),
+      farmer: createFarmer(),
+      farmZones: [],
+    },
+    2: {
+      gridWidth: DEFAULT_GRID_WIDTH,
+      gridHeight: DEFAULT_GRID_HEIGHT,
+      tiles: createInitialTiles(DEFAULT_GRID_WIDTH, DEFAULT_GRID_HEIGHT),
+      farmer: createFarmer(),
+      farmZones: [],
+    }
+  }
 };
 
 // ─── Slice ────────────────────────────────────────────────
@@ -189,6 +218,23 @@ const gameSlice = createSlice({
       state.tick = 0;
       state.totalHarvested = 0;
       state.totalPlanted = 0;
+      state.activePlotId = 1;
+      state.plots = {
+        1: {
+          gridWidth: w,
+          gridHeight: h,
+          tiles: state.tiles,
+          farmer: state.farmer,
+          farmZones: [],
+        },
+        2: {
+          gridWidth: w,
+          gridHeight: h,
+          tiles: createInitialTiles(w, h),
+          farmer: createFarmer(),
+          farmZones: [],
+        }
+      };
     },
 
     // ── Movement ──
@@ -200,7 +246,14 @@ const gameSlice = createSlice({
     moveDrone(state, action: PayloadAction<{ droneId: string; direction: Direction }>) {
       const drone = state.drones.find((d) => d.id === action.payload.droneId);
       if (!drone) return;
-      tryMoveEntity(drone, action.payload.direction, state.tiles, state.gridWidth, state.gridHeight, DRONE_MOVE_ENERGY_COST);
+      const plotId = drone.plotId || 1;
+      const isCurrentPlot = plotId === state.activePlotId;
+      const tiles = isCurrentPlot ? state.tiles : state.plots[plotId]?.tiles;
+      const w = isCurrentPlot ? state.gridWidth : state.plots[plotId]?.gridWidth;
+      const h = isCurrentPlot ? state.gridHeight : state.plots[plotId]?.gridHeight;
+      if (tiles && w !== undefined && h !== undefined) {
+        tryMoveEntity(drone, action.payload.direction, tiles, w, h, DRONE_MOVE_ENERGY_COST);
+      }
     },
 
     // Legacy: moveRobot dispatches to current control target
@@ -209,19 +262,29 @@ const gameSlice = createSlice({
         tryMoveEntity(state.farmer, action.payload, state.tiles, state.gridWidth, state.gridHeight, FARMER_MOVE_ENERGY_COST);
       } else if (state.activeDroneId) {
         const drone = state.drones.find((d) => d.id === state.activeDroneId);
-        if (drone) tryMoveEntity(drone, action.payload, state.tiles, state.gridWidth, state.gridHeight, DRONE_MOVE_ENERGY_COST);
+        if (drone) {
+          const plotId = drone.plotId || 1;
+          const isCurrentPlot = plotId === state.activePlotId;
+          const tiles = isCurrentPlot ? state.tiles : state.plots[plotId]?.tiles;
+          const w = isCurrentPlot ? state.gridWidth : state.plots[plotId]?.gridWidth;
+          const h = isCurrentPlot ? state.gridHeight : state.plots[plotId]?.gridHeight;
+          if (tiles && w !== undefined && h !== undefined) {
+            tryMoveEntity(drone, action.payload, tiles, w, h, DRONE_MOVE_ENERGY_COST);
+          }
+        }
       }
     },
 
     // ── Control switching ──
 
     switchControlMode(state) {
-      if (state.drones.length === 0) return;
+      const activePlotDrones = state.drones.filter(d => d.plotId === state.activePlotId);
+      if (activePlotDrones.length === 0) return;
       if (state.controlMode === 'farmer') {
         state.controlMode = 'drone';
-        if (!state.activeDroneId && state.drones.length > 0) {
-          state.activeDroneId = state.drones[0].id;
-          state.drones[0].status = 'manual';
+        if (!state.activeDroneId && activePlotDrones.length > 0) {
+          state.activeDroneId = activePlotDrones[0].id;
+          activePlotDrones[0].status = 'manual';
         }
       } else {
         // Set current drone back to previous status
@@ -234,6 +297,25 @@ const gameSlice = createSlice({
     selectDrone(state, action: PayloadAction<string>) {
       const drone = state.drones.find((d) => d.id === action.payload);
       if (!drone) return;
+      
+      // Auto-switch plot if drone is on a different plot
+      if (drone.plotId !== state.activePlotId) {
+        state.plots[state.activePlotId] = {
+          gridWidth: state.gridWidth,
+          gridHeight: state.gridHeight,
+          tiles: state.tiles,
+          farmer: state.farmer,
+          farmZones: state.farmZones,
+        };
+        state.activePlotId = drone.plotId;
+        const newPlot = state.plots[drone.plotId];
+        state.gridWidth = newPlot.gridWidth;
+        state.gridHeight = newPlot.gridHeight;
+        state.tiles = newPlot.tiles;
+        state.farmer = newPlot.farmer;
+        state.farmZones = newPlot.farmZones;
+      }
+
       // Reset old active drone
       if (state.activeDroneId) {
         const old = state.drones.find((d) => d.id === state.activeDroneId);
@@ -250,7 +332,7 @@ const gameSlice = createSlice({
       const { cropType, entityType, droneId } = action.payload;
 
       // Determine which entity is planting
-      let entity: { x: number; y: number; energy: number } | undefined;
+      let entity: { x: number; y: number; energy: number; plotId?: number } | undefined;
       let energyCost: number;
 
       if (entityType === 'drone' && droneId) {
@@ -266,7 +348,11 @@ const gameSlice = createSlice({
 
       if (!entity || entity.energy < energyCost) return;
 
-      const tile = state.tiles[entity.y]?.[entity.x];
+      const plotId = entity.plotId ?? state.activePlotId;
+      const isCurrentPlot = plotId === state.activePlotId;
+      const tiles = isCurrentPlot ? state.tiles : state.plots[plotId]?.tiles;
+
+      const tile = tiles?.[entity.y]?.[entity.x];
       if (!tile || tile.type !== TileType.FARMLAND || tile.crop !== null) return;
 
       const seedKey = `seed_${cropType}`;
@@ -286,7 +372,7 @@ const gameSlice = createSlice({
     },
 
     harvestCrop(state, action: PayloadAction<{ entityType?: 'farmer' | 'drone'; droneId?: string } | undefined>) {
-      let entity: { x: number; y: number; energy: number } | undefined;
+      let entity: { x: number; y: number; energy: number; plotId?: number } | undefined;
       let energyCost: number;
 
       if (action.payload?.entityType === 'drone' && action.payload?.droneId) {
@@ -302,7 +388,11 @@ const gameSlice = createSlice({
 
       if (!entity || entity.energy < energyCost) return;
 
-      const tile = state.tiles[entity.y]?.[entity.x];
+      const plotId = entity.plotId ?? state.activePlotId;
+      const isCurrentPlot = plotId === state.activePlotId;
+      const tiles = isCurrentPlot ? state.tiles : state.plots[plotId]?.tiles;
+
+      const tile = tiles?.[entity.y]?.[entity.x];
       if (!tile?.crop || tile.crop.stage !== GrowthStage.HARVESTABLE) return;
 
       const cropDef = CROP_DEFINITIONS[tile.crop.type];
@@ -330,8 +420,10 @@ const gameSlice = createSlice({
     addDrone(state, action: PayloadAction<{ name?: string }>) {
       const idx = state.drones.length + 1;
       const name = action.payload?.name || `Drone #${idx}`;
-      // Spawn near farmer
-      const drone = createDrone(`drone-${idx}-${Date.now()}`, name, state.farmer.x, state.farmer.y);
+      const plotId = state.activePlotId || 1;
+      const activeFarmer = state.farmer;
+      const drone = createDrone(`drone-${idx}-${Date.now()}`, name, activeFarmer.x, activeFarmer.y);
+      drone.plotId = plotId;
       state.drones.push(drone);
       if (!state.activeDroneId) state.activeDroneId = drone.id;
     },
@@ -354,6 +446,11 @@ const gameSlice = createSlice({
     renameDrone(state, action: PayloadAction<{ droneId: string; name: string }>) {
       const drone = state.drones.find((d) => d.id === action.payload.droneId);
       if (drone) drone.name = action.payload.name.trim() || drone.name;
+    },
+
+    toggleDroneLoop(state, action: PayloadAction<{ droneId: string }>) {
+      const drone = state.drones.find((d) => d.id === action.payload.droneId);
+      if (drone) drone.loopScript = !drone.loopScript;
     },
 
     // ── Farm Zones ──
@@ -397,7 +494,7 @@ const gameSlice = createSlice({
     gameTick(state) {
       if (!state.isRunning) return;
 
-      // Update crop growth
+      // Update crop growth on active plot
       for (const row of state.tiles) {
         for (const tile of row) {
           if (!tile.crop) continue;
@@ -416,11 +513,47 @@ const gameSlice = createSlice({
         }
       }
 
-      // Regen farmer energy
+      // Update crop growth on inactive plots
+      for (const plotId in state.plots) {
+        if (Number(plotId) === state.activePlotId) continue;
+        const plot = state.plots[plotId];
+        if (!plot || !plot.tiles) continue;
+        for (const row of plot.tiles) {
+          for (const tile of row) {
+            if (!tile.crop) continue;
+            const cropDef = CROP_DEFINITIONS[tile.crop.type];
+            const ticksAlive = state.tick - tile.crop.plantedAt + 1;
+            const progress = Math.min(ticksAlive / cropDef.growthTicks, 1);
+
+            let stage = GrowthStage.SEED;
+            if (progress >= GROWTH_THRESHOLDS.HARVESTABLE) stage = GrowthStage.HARVESTABLE;
+            else if (progress >= GROWTH_THRESHOLDS.MATURE) stage = GrowthStage.MATURE;
+            else if (progress >= GROWTH_THRESHOLDS.GROWING) stage = GrowthStage.GROWING;
+            else if (progress >= GROWTH_THRESHOLDS.SPROUT) stage = GrowthStage.SPROUT;
+
+            tile.crop.growthProgress = progress * 100;
+            tile.crop.stage = stage;
+          }
+        }
+      }
+
+      // Regen farmer energy on active plot
       state.farmer.energy = Math.min(
         state.farmer.energy + FARMER_ENERGY_REGEN_RATE,
         state.farmer.maxEnergy,
       );
+
+      // Regen farmer energy on inactive plots
+      for (const plotId in state.plots) {
+        if (Number(plotId) === state.activePlotId) continue;
+        const plot = state.plots[plotId];
+        if (plot && plot.farmer) {
+          plot.farmer.energy = Math.min(
+            plot.farmer.energy + FARMER_ENERGY_REGEN_RATE,
+            plot.farmer.maxEnergy,
+          );
+        }
+      }
 
       // Regen drone energy
       for (const drone of state.drones) {
@@ -468,6 +601,13 @@ const gameSlice = createSlice({
     upgradeEnergy(state, action: PayloadAction<number>) {
       state.farmer.maxEnergy += action.payload;
       state.farmer.energy = state.farmer.maxEnergy;
+      for (const plotId in state.plots) {
+        const plot = state.plots[plotId];
+        if (plot && plot.farmer) {
+          plot.farmer.maxEnergy += action.payload;
+          plot.farmer.energy = plot.farmer.maxEnergy;
+        }
+      }
       for (const drone of state.drones) {
         drone.maxEnergy += action.payload;
         drone.energy = drone.maxEnergy;
@@ -478,8 +618,74 @@ const gameSlice = createSlice({
       try {
         const p = JSON.parse(action.payload);
         Object.assign(state, p);
+
+        // Migrations / backward compatibility:
+        if (!state.activePlotId) {
+          state.activePlotId = 1;
+        }
+        if (!state.plots) {
+          state.plots = {
+            1: {
+              gridWidth: state.gridWidth,
+              gridHeight: state.gridHeight,
+              tiles: state.tiles,
+              farmer: state.farmer,
+              farmZones: state.farmZones || [],
+            },
+            2: {
+              gridWidth: state.gridWidth,
+              gridHeight: state.gridHeight,
+              tiles: createInitialTiles(state.gridWidth, state.gridHeight),
+              farmer: createFarmer(),
+              farmZones: [],
+            }
+          };
+        }
+        if (state.drones) {
+          state.drones.forEach(d => {
+            if (d.plotId === undefined) {
+              d.plotId = 1;
+            }
+          });
+        }
       } catch (e) {
         console.error('Failed to load save:', e);
+      }
+    },
+
+    switchPlot(state, action: PayloadAction<number>) {
+      const newPlotId = action.payload;
+      if (newPlotId === state.activePlotId) return;
+      if (newPlotId !== 1 && newPlotId !== 2) return;
+
+      // 1. Save current active plot's state
+      state.plots[state.activePlotId] = {
+        gridWidth: state.gridWidth,
+        gridHeight: state.gridHeight,
+        tiles: state.tiles,
+        farmer: state.farmer,
+        farmZones: state.farmZones,
+      };
+
+      // 2. Switch activePlotId
+      state.activePlotId = newPlotId;
+
+      // 3. Load new plot's state to root fields
+      const newPlot = state.plots[newPlotId];
+      state.gridWidth = newPlot.gridWidth;
+      state.gridHeight = newPlot.gridHeight;
+      state.tiles = newPlot.tiles;
+      state.farmer = newPlot.farmer;
+      state.farmZones = newPlot.farmZones;
+
+      // 4. Update active drone to be the active drone on the new plot, or null if none
+      const activeDroneForNewPlot = state.drones.find(d => d.plotId === newPlotId && d.status === 'manual');
+      if (activeDroneForNewPlot) {
+        state.activeDroneId = activeDroneForNewPlot.id;
+        state.controlMode = 'drone';
+      } else {
+        state.activeDroneId = null;
+        state.controlMode = 'farmer';
       }
     },
   },
@@ -491,11 +697,13 @@ export const {
   assignDroneToZone, addFarmZone, removeFarmZone, expandFarm,
   gameTick, updateEntityVisuals, setRunning, setTickRate,
   addItem, removeItem, upgradeEnergy, loadSerializedState,
+  switchPlot, toggleDroneLoop,
 } = gameSlice.actions;
 export const gameReducer = gameSlice.reducer;
 
 // ─── Selectors ────────────────────────────────────────────
 
+export const selectActivePlotId = (s: { game: GameState }) => s.game.activePlotId;
 export const selectFarmer = (s: { game: GameState }) => s.game.farmer;
 export const selectDrones = (s: { game: GameState }) => s.game.drones;
 export const selectActiveDrone = (s: { game: GameState }) =>

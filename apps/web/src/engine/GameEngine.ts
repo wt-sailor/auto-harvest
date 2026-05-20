@@ -81,10 +81,11 @@ export class GameEngine {
 
     if (this.renderer) {
       const state = store.getState().game;
+      const activePlotDrones = state.drones.filter((d) => d.plotId === state.activePlotId);
       this.renderer.render(
         state.tiles,
         state.farmer,
-        state.drones,
+        activePlotDrones,
         state.farmZones,
         state.gridWidth,
         state.gridHeight,

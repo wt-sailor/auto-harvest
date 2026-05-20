@@ -8,7 +8,7 @@ import { useAppSelector, useAppDispatch } from '../../store';
 import {
   selectDrones, selectActiveDrone,
   selectDrone as selectDroneAction,
-  setDroneStatus, renameDrone,
+  setDroneStatus, renameDrone, toggleDroneLoop,
 } from '../../store/slices/gameSlice';
 import { selectTier, selectCanAutomate } from '../../store/slices/progressionSlice';
 import { setSelectedDroneForScript, setActivePanel } from '../../store/slices/uiSlice';
@@ -164,6 +164,9 @@ export function DroneManagerPanel() {
                 <span className="flex items-center gap-1">
                   <Zap className="w-3 h-3 text-yellow-500" /> {Math.round(drone.energy)}/{drone.maxEnergy}
                 </span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-farm-800 text-farm-300 border border-farm-700/50">
+                  Plot {drone.plotId || 1}
+                </span>
               </div>
 
               {/* Energy bar */}
@@ -175,10 +178,24 @@ export function DroneManagerPanel() {
                 />
               </div>
 
-              {/* Script indicator */}
-              <div className="flex items-center gap-1 text-farm-600 text-[10px] mb-2">
-                <Code2 className="w-3 h-3" />
-                <span className="truncate">{drone.script ? `${drone.script.split('\n').filter(l => l.trim() && !l.trim().startsWith('//')).length} lines of code` : 'No script'}</span>
+              {/* Script indicator & Loop toggle */}
+              <div className="flex items-center justify-between text-[10px] mb-2">
+                <div className="flex items-center gap-1 text-farm-600 min-w-0 flex-1">
+                  <Code2 className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{drone.script ? `${drone.script.split('\n').filter(l => l.trim() && !l.trim().startsWith('//')).length} lines of code` : 'No script'}</span>
+                </div>
+                <label 
+                  onClick={(e) => e.stopPropagation()} 
+                  className="flex items-center gap-1 cursor-pointer select-none text-farm-400 hover:text-farm-200 ml-2 shrink-0 font-medium"
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!drone.loopScript}
+                    onChange={() => dispatch(toggleDroneLoop({ droneId: drone.id }))}
+                    className="accent-olive-500 rounded border-farm-800 bg-farm-900 focus:ring-0 w-3 h-3"
+                  />
+                  <span>Loop</span>
+                </label>
               </div>
 
               {/* Actions */}

@@ -28,7 +28,6 @@ import {
   Home,
   Save,
   Download,
-  Settings,
   ShoppingCart,
   Code2,
   Bot,
@@ -442,9 +441,6 @@ export function GamePage() {
           >
             <Download className="w-3 h-3" /> Load
           </motion.button>
-          <button className="btn-ghost !py-1 !px-2 text-xs flex items-center gap-1 text-farm-500">
-            <Settings className="w-3 h-3" />
-          </button>
         </div>
       </motion.div>
 

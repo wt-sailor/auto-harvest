@@ -3,15 +3,33 @@
 // ============================================================
 
 import { motion } from 'framer-motion';
-import { useAppSelector } from '../../store';
-import { selectFarmer, selectDrones, selectControlMode, selectActiveDrone, selectGameStats, selectInventory } from '../../store/slices/gameSlice';
-import { selectTier, selectUnlockedCrops } from '../../store/slices/progressionSlice';
+import { useAppSelector, useAppDispatch } from '../../store';
+import {
+  selectFarmer, selectDrones, selectControlMode, selectActiveDrone,
+  selectGameStats, selectInventory, selectActivePlotId, switchPlot
+} from '../../store/slices/gameSlice';
+import { selectTier, selectUnlockedCrops, selectPurchasedItems } from '../../store/slices/progressionSlice';
 import { TierProgressBar } from './TierProgressBar';
 import { Zap, Bot } from 'lucide-react';
 import { CROP_DEFINITIONS } from '@autoharvest/shared';
 import type { CropType } from '@autoharvest/shared';
 
+function formatTime(ticks: number, tickRate: number) {
+  const totalSeconds = Math.floor(ticks / (tickRate || 10));
+  const hrs = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+  
+  if (hrs > 0) {
+    return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
+  }
+  return `${pad(mins)}:${pad(secs)}`;
+}
+
 export function ResourceBar() {
+  const dispatch = useAppDispatch();
   const farmer = useAppSelector(selectFarmer);
   const drones = useAppSelector(selectDrones);
   const controlMode = useAppSelector(selectControlMode);
@@ -20,8 +38,11 @@ export function ResourceBar() {
   const inventory = useAppSelector(selectInventory);
   const tier = useAppSelector(selectTier);
   const unlockedCrops = useAppSelector(selectUnlockedCrops);
+  const activePlotId = useAppSelector(selectActivePlotId);
+  const purchasedItems = useAppSelector(selectPurchasedItems);
 
   const gold = inventory.items.gold || 0;
+  const isPlot2Unlocked = purchasedItems.includes('farm-expand-1');
 
   // Get active entity energy
   const activeEntity = controlMode === 'drone' && activeDrone ? activeDrone : farmer;
@@ -50,6 +71,38 @@ export function ResourceBar() {
           {controlMode === 'farmer' ? 'Farmer' : activeDrone?.name || 'Drone'}
         </span>
       </motion.div>
+
+      {/* Plot Switcher */}
+      <div className="flex items-center gap-1 bg-farm-900/40 border border-farm-800/40 p-0.5 rounded-lg shrink-0">
+        <button
+          onClick={() => dispatch(switchPlot(1))}
+          className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-all ${
+            activePlotId === 1
+              ? 'bg-olive-500 text-farm-100 font-semibold shadow-sm shadow-olive-950/20'
+              : 'text-farm-400 hover:text-farm-200 hover:bg-farm-800/40'
+          }`}
+        >
+          Plot 1
+        </button>
+        <button
+          onClick={() => {
+            if (isPlot2Unlocked) {
+              dispatch(switchPlot(2));
+            }
+          }}
+          disabled={!isPlot2Unlocked}
+          className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-all flex items-center gap-1 ${
+            activePlotId === 2
+              ? 'bg-olive-500 text-farm-100 font-semibold shadow-sm shadow-olive-950/20'
+              : isPlot2Unlocked
+              ? 'text-farm-400 hover:text-farm-200 hover:bg-farm-800/40'
+              : 'text-farm-600 cursor-not-allowed opacity-60'
+          }`}
+          title={isPlot2Unlocked ? "Switch to Plot 2" : "Unlock Plot 2 in the Shop"}
+        >
+          Plot 2 {!isPlot2Unlocked && '🔒'}
+        </button>
+      </div>
 
       {/* Energy */}
       <div className="flex items-center gap-1.5 shrink-0">
@@ -98,8 +151,8 @@ export function ResourceBar() {
       )}
 
       {/* Stats */}
-      <span className="text-farm-600 shrink-0">
-        ⏱ T:{stats.tick}
+      <span className="text-farm-600 shrink-0 flex items-center gap-1 font-mono" title={`Tick: ${stats.tick}`}>
+        ⏱ {formatTime(stats.tick, stats.tickRate)}
       </span>
       <span className="text-farm-600 shrink-0">
         Pos: ({activeEntity.x},{activeEntity.y})

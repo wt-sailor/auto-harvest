@@ -3,8 +3,8 @@
 // ============================================================
 
 /** Default grid dimensions */
-export const DEFAULT_GRID_WIDTH = 16;
-export const DEFAULT_GRID_HEIGHT = 16;
+export const DEFAULT_GRID_WIDTH = 10;
+export const DEFAULT_GRID_HEIGHT = 10;
 
 /** Maximum grid size */
 export const MAX_GRID_WIDTH = 50;
@@ -110,8 +110,8 @@ export const SHOP_ITEMS: ShopItem[] = [
 
   // --- Farm ---
   {
-    id: 'farm-expand-1', name: 'Farm Plot +2', description: 'Expand your farm by 2 rows and columns.',
-    cost: 300, category: 'farm', icon: '🏗️', requiredTier: 4, maxPurchases: 3,
+    id: 'farm-expand-1', name: 'Unlock Plot 2', description: 'Purchase a second plot to double your farming capacity.',
+    cost: 300, category: 'farm', icon: '🏗️', requiredTier: 4, maxPurchases: 1,
   },
 
   // --- Crops ---
